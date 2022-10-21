@@ -1,4 +1,4 @@
-module github.com/vippsas/zeroeventhub/go/zeroeventhub
+module github.com/vippsas/zeroeventhub/go
 
 go 1.18
 
