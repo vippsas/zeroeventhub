@@ -84,8 +84,6 @@ In situations where the number of consumers is very high and all are reading a l
 of data this is a legitimate advantage of Event Hub; Event Hub helps distribute
 the load of reading events.
 
-We are not aware of any usecases in Vipps where the load makes this relevant.
-
 Note also that Azure SQL databases have read-only replicas that can take
 this load; in the case of Azure SQL Hyperscale you can scale those to any number
 and even dedicate them to certain consumers.
