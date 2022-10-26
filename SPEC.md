@@ -191,7 +191,7 @@ GET https://myservice/my-kind-of-entity/feed/v1?cursor0=1000240213123&cursor1=12
 * **cursorN**: Pass in one cursor for each partition you wish to
   consume; where `N` is a number in the range `0...n-1`.
   Each `cursor` is an opaque string that should be passed
-  back as-is, but is limited to the base64 character set. Two special
+  back as-is, but is limited to ASCII printable characters. Two special
   cursors are used; `_first` means to start from the beginning of time,
   and `_last` starts at an arbitrary point "around now".
 
