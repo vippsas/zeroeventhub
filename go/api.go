@@ -292,7 +292,7 @@ type checkpointOrEvent struct {
 
 // FetchEvents is a client-side implementation that queries the server and properly deserializes received data.
 func (c Client) FetchEvents(ctx context.Context, cursors []Cursor, pageSizeHint int, r EventReceiver, headers ...string) error {
-	c.logger.WithField("event", "zeroeventhub.fetch_events_entered").Info()
+	c.logger.WithField("event", "zeroeventhub.fetch_events_entered").Debug()
 	if len(cursors) == 0 {
 		c.logger.WithFields(logrus.Fields{
 			"event":      "zeroeventhub.missing_cursor_error",
@@ -301,6 +301,7 @@ func (c Client) FetchEvents(ctx context.Context, cursors []Cursor, pageSizeHint 
 		return ErrCursorsMissing
 	}
 
+	c.logger.WithField("event", "zeroeventhub.new_request").Debug()
 	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/feed/v1", c.url), nil)
 	if err != nil {
 		c.logger.WithFields(logrus.Fields{
@@ -312,6 +313,7 @@ func (c Client) FetchEvents(ctx context.Context, cursors []Cursor, pageSizeHint 
 
 	req = req.WithContext(ctx)
 
+	c.logger.WithField("event", "zeroeventhub.url_setup").Debug()
 	q := req.URL.Query()
 	q.Add("n", fmt.Sprintf("%d", c.partitionCount))
 	if pageSizeHint != DefaultPageSize {
@@ -325,6 +327,7 @@ func (c Client) FetchEvents(ctx context.Context, cursors []Cursor, pageSizeHint 
 	}
 	req.URL.RawQuery = q.Encode()
 
+	c.logger.WithField("event", "zeroeventhub.request_processor").Debug()
 	if err := c.requestProcessor(req); err != nil {
 		c.logger.WithFields(logrus.Fields{
 			"event":      "zeroeventhub.request_processor_error",
@@ -333,6 +336,7 @@ func (c Client) FetchEvents(ctx context.Context, cursors []Cursor, pageSizeHint 
 		return err
 	}
 
+	c.logger.WithField("event", "zeroeventhub.do_request").Debug()
 	res, err := c.httpClient.Do(req)
 	if err != nil {
 		c.logger.WithFields(logrus.Fields{
@@ -345,19 +349,27 @@ func (c Client) FetchEvents(ctx context.Context, cursors []Cursor, pageSizeHint 
 		_ = body.Close()
 	}(res.Body)
 
+	c.logger.WithField("event", "zeroeventhub.status_code_check").Debug()
 	if res.StatusCode/100 != 2 {
 		if all, err := io.ReadAll(res.Body); err != nil {
 			c.logger.WithFields(logrus.Fields{
-				"event":      "zeroeventhub.bad_status_code",
+				"event":      "zeroeventhub.read_body_err",
 				"statusCode": strconv.Itoa(res.StatusCode),
 				"stackTrace": errors.WithStack(err).Error(),
 			}).WithError(err).Debug()
 			return err
 		} else {
-			return errors.New(string(all))
+			err = errors.New(string(all))
+			c.logger.WithFields(logrus.Fields{
+				"event":      "zeroeventhub.bad_status_code",
+				"statusCode": strconv.Itoa(res.StatusCode),
+				"stackTrace": errors.WithStack(err),
+			}).WithError(err).Debug()
+			return err
 		}
 	}
 
+	c.logger.WithField("event", "zeroeventhub.scanner_start").Debug()
 	scanner := bufio.NewScanner(res.Body)
 	for scanner.Scan() {
 		line := bytes.TrimSpace(scanner.Bytes())
@@ -372,6 +384,7 @@ func (c Client) FetchEvents(ctx context.Context, cursors []Cursor, pageSizeHint 
 		}
 		if parsedLine.Cursor != "" {
 			// checkpoint
+			c.logger.WithField("event", "zeroeventhub.checkpoing_start").Debug()
 			if err := r.Checkpoint(parsedLine.PartitionId, parsedLine.Cursor); err != nil {
 				c.logger.WithFields(logrus.Fields{
 					"event":      "zeroeventhub.checkpoint_error",
@@ -382,6 +395,7 @@ func (c Client) FetchEvents(ctx context.Context, cursors []Cursor, pageSizeHint 
 
 		} else {
 			// event
+			c.logger.WithField("event", "zeroeventhub.event_start").Debug()
 			if err := r.Event(parsedLine.PartitionId, parsedLine.Headers, parsedLine.Data); err != nil {
 				c.logger.WithFields(logrus.Fields{
 					"event":      "zeroeventhub.event_error",
