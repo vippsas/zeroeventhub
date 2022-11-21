@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/gorilla/mux"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -298,6 +298,10 @@ func (c Client) FetchEvents(ctx context.Context, cursors []Cursor, pageSizeHint 
 
 	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/feed/v1", c.url), nil)
 	if err != nil {
+		c.logger.WithFields(logrus.Fields{
+			"event":      "zeroeventhub.request_setup_error",
+			"stackTrace": errors.WithStack(err).Error(),
+		}).WithError(err).Debug()
 		return err
 	}
 
@@ -317,11 +321,19 @@ func (c Client) FetchEvents(ctx context.Context, cursors []Cursor, pageSizeHint 
 	req.URL.RawQuery = q.Encode()
 
 	if err := c.requestProcessor(req); err != nil {
+		c.logger.WithFields(logrus.Fields{
+			"event":      "zeroeventhub.request_processor_error",
+			"stackTrace": errors.WithStack(err).Error(),
+		}).WithError(err).Debug()
 		return err
 	}
 
 	res, err := c.httpClient.Do(req)
 	if err != nil {
+		c.logger.WithFields(logrus.Fields{
+			"event":      "zeroeventhub.do_request_error",
+			"stackTrace": errors.WithStack(err).Error(),
+		}).WithError(err).Debug()
 		return err
 	}
 	defer func(body io.ReadCloser) {
@@ -330,6 +342,11 @@ func (c Client) FetchEvents(ctx context.Context, cursors []Cursor, pageSizeHint 
 
 	if res.StatusCode/100 != 2 {
 		if all, err := io.ReadAll(res.Body); err != nil {
+			c.logger.WithFields(logrus.Fields{
+				"event":      "zeroeventhub.bad_status_code",
+				"statusCode": strconv.Itoa(res.StatusCode),
+				"stackTrace": errors.WithStack(err).Error(),
+			}).WithError(err).Debug()
 			return err
 		} else {
 			return errors.New(string(all))
@@ -351,12 +368,20 @@ func (c Client) FetchEvents(ctx context.Context, cursors []Cursor, pageSizeHint 
 		if parsedLine.Cursor != "" {
 			// checkpoint
 			if err := r.Checkpoint(parsedLine.PartitionId, parsedLine.Cursor); err != nil {
+				c.logger.WithFields(logrus.Fields{
+					"event":      "zeroeventhub.checkpoint_error",
+					"stackTrace": errors.WithStack(err).Error(),
+				}).WithError(err).Debug()
 				return err
 			}
 
 		} else {
 			// event
 			if err := r.Event(parsedLine.PartitionId, parsedLine.Headers, parsedLine.Data); err != nil {
+				c.logger.WithFields(logrus.Fields{
+					"event":      "zeroeventhub.event_error",
+					"stackTrace": errors.WithStack(err).Error(),
+				}).WithError(err).Debug()
 				return err
 			}
 		}
