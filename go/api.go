@@ -316,6 +316,11 @@ func (c Client) FetchEvents(ctx context.Context, cursors []Cursor, pageSizeHint 
 	}
 	req.URL.RawQuery = q.Encode()
 
+	c.logger.WithFields(logrus.Fields{
+		"event": "zeroeventhub.url_check",
+		"url":   req.URL.String(),
+	}).WithContext(ctx).Debug()
+
 	if err := c.requestProcessor(req); err != nil {
 		return err
 	}
