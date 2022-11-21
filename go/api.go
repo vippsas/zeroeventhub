@@ -292,7 +292,12 @@ type checkpointOrEvent struct {
 
 // FetchEvents is a client-side implementation that queries the server and properly deserializes received data.
 func (c Client) FetchEvents(ctx context.Context, cursors []Cursor, pageSizeHint int, r EventReceiver, headers ...string) error {
+	c.logger.WithField("event", "zeroeventhub.fetch_events_entered").Info()
 	if len(cursors) == 0 {
+		c.logger.WithFields(logrus.Fields{
+			"event":      "zeroeventhub.missing_cursor_error",
+			"stackTrace": errors.WithStack(ErrCursorsMissing).Error(),
+		}).WithError(ErrCursorsMissing).Debug()
 		return ErrCursorsMissing
 	}
 
