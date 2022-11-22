@@ -473,9 +473,9 @@ func TestMockResponses(t *testing.T) {
 	var page EventPageSingleType[TestEvent]
 
 	err := client.FetchEvents(context.Background(), []Cursor{{Cursor: cursorReturn500}}, DefaultPageSize, &page, All)
-	require.EqualError(t, err, "Unexpected response body: error when fetching events\n")
+	require.EqualError(t, err, "unexpected response body: error when fetching events\n")
 	err = client.FetchEvents(context.Background(), []Cursor{{Cursor: cursorReturn504}}, DefaultPageSize, &page, All)
-	require.EqualError(t, err, "Empty response body")
+	require.EqualError(t, err, "empty response body")
 
 	// Checking logged entries
 	http500logged := false
