@@ -133,8 +133,8 @@ func TestAPI(t *testing.T) {
 		pageSizeHint   int
 		cursors        []Cursor
 
-		expectedEvents int
-		expectedError  error
+		expectedEvents      int
+		expectedErrorString string
 	}{
 		{
 			name:           "wrong partition count",
@@ -143,7 +143,7 @@ func TestAPI(t *testing.T) {
 				PartitionID: 0,
 				Cursor:      "qwerty",
 			}},
-			expectedError: errors.New("handshake error: partition count mismatch\n"),
+			expectedErrorString: "unexpected response body: handshake error: partition count mismatch\n",
 		},
 		{
 			name:           "wrong cursor",
@@ -152,7 +152,7 @@ func TestAPI(t *testing.T) {
 				PartitionID: 0,
 				Cursor:      "qwerty",
 			}},
-			expectedError: errors.New("strconv.Atoi: parsing \"qwerty\": invalid syntax\n"),
+			expectedErrorString: "unexpected response body: strconv.Atoi: parsing \"qwerty\": invalid syntax\n",
 		},
 		{
 			name:           "out of range cursor",
@@ -237,9 +237,10 @@ func TestAPI(t *testing.T) {
 			var client EventFetcher = NewClient(server.URL, test.partitionCount)
 			var page EventPageSingleType[TestEvent]
 			err := client.FetchEvents(context.Background(), test.cursors, test.pageSizeHint, &page)
-			require.Equal(t, test.expectedError, err)
 			if err == nil {
 				require.Equal(t, test.expectedEvents, len(page.Events))
+			} else {
+				require.Equal(t, test.expectedErrorString, err.Error())
 			}
 		})
 	}

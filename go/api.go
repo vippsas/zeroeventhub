@@ -334,10 +334,10 @@ func (c Client) FetchEvents(ctx context.Context, cursors []Cursor, pageSizeHint 
 			log.WithField("event", "zeroeventhub.res_body_read_error").WithError(err).Error()
 			return err
 		} else {
-			if string(all) == "\n" {
-				err = errors.Errorf("Empty response body")
+			if string(all) == "\n" || string(all) == "" {
+				err = errors.Errorf("empty response body")
 			} else {
-				err = errors.Errorf("Unexpected response body: %s", string(all))
+				err = errors.Errorf("unexpected response body: %s", string(all))
 			}
 			log.WithField("event", "zeroeventhub.unexpected_response_body").WithError(err).Error()
 			return err
