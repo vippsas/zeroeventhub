@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/gorilla/mux"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -329,10 +329,18 @@ func (c Client) FetchEvents(ctx context.Context, cursors []Cursor, pageSizeHint 
 	}(res.Body)
 
 	if res.StatusCode/100 != 2 {
+		log := c.logger.WithField("responseCode", strconv.Itoa(res.StatusCode)).WithContext(ctx)
 		if all, err := io.ReadAll(res.Body); err != nil {
+			log.WithField("event", "zeroeventhub.res_body_read_error").WithError(err).Error()
 			return err
 		} else {
-			return errors.New(string(all))
+			if string(all) == "" {
+				err = errors.Errorf("Empty response body")
+			} else {
+				err = errors.Errorf("Unexpected response body: %s", string(all))
+			}
+			log.WithField("event", "zeroeventhub.unexpected_response_body").WithError(err).Error()
+			return err
 		}
 	}
 
