@@ -4,7 +4,6 @@ on: [push]
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -13,6 +12,8 @@ jobs:
         with:
           go-version: 1.18
       - name: Build
-        run: go build -v ./...
+        run: go build .
+        working-directory: ./go
       - name: Test
-        run: go test -v ./...
+        run: go test
+        working-directory: ./go
