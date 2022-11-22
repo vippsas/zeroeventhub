@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/stretchr/testify/assert"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
+	hookstest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/require"
 )
 
@@ -79,6 +81,11 @@ func (t TestZeroEventHubAPI) FetchEvents(ctx context.Context, cursors []Cursor, 
 			lastProcessedCursor = -100
 		case LastCursor:
 			lastProcessedCursor = len(partition) - 2
+		// Mock responses: set the cursor to one of the following values to get a mocked response.
+		case cursorReturn500:
+			return err500
+		case cursorReturn504:
+			return err504
 		default:
 			lastProcessedCursor, err = strconv.Atoi(cursor.Cursor)
 			if err != nil {
@@ -411,4 +418,76 @@ func TestEnvelopeHeaders(t *testing.T) {
 	require.Len(t, page.Events[0].Headers, 2)
 	require.Equal(t, "application/json", page.Events[0].Headers["content-type"])
 	require.Equal(t, "bar", page.Events[0].Headers["foo"])
+}
+
+// Variables for mocking responses
+var err500 = errors.New("error when fetching events")
+var err504 = errors.New("") // The response body is supposed to be blank in this case.
+
+const (
+	cursorReturn500 = "returnHttp500"
+	cursorReturn504 = "returnHttp504"
+)
+
+func MockHandler(logger logrus.FieldLogger, api API) http.Handler {
+	if logger == nil {
+		logger = logrus.StandardLogger()
+	}
+	router := mux.NewRouter()
+	router.Methods(http.MethodGet).
+		Path("/feed/v1").
+		HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			query := request.URL.Query()
+			cursors, err := parseCursors(api.GetPartitionCount(), query)
+			if err != nil {
+				http.Error(writer, err.Error(), http.StatusBadRequest)
+				return
+			}
+
+			serializer := NewNDJSONEventSerializer(writer)
+			err = api.FetchEvents(request.Context(), cursors, 10, serializer, All)
+			switch err {
+			case err500:
+				http.Error(writer, err.Error(), http.StatusInternalServerError)
+				return
+			case err504:
+				http.Error(writer, err.Error(), http.StatusGatewayTimeout)
+				return
+			default:
+				// Proceed
+			}
+		})
+	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		router.ServeHTTP(writer, request)
+	})
+}
+
+func TestMockResponses(t *testing.T) {
+	log := logrus.New()
+	h := hookstest.NewLocal(log)
+	logrus.AddHook(h)
+
+	server := httptest.NewServer(MockHandler(nil, NewTestZeroEventHubAPI()))
+	client := NewClient(server.URL, 2)
+	var page EventPageSingleType[TestEvent]
+
+	err := client.FetchEvents(context.Background(), []Cursor{{Cursor: cursorReturn500}}, DefaultPageSize, &page, All)
+	require.EqualError(t, err, "Unexpected response body: error when fetching events\n")
+	err = client.FetchEvents(context.Background(), []Cursor{{Cursor: cursorReturn504}}, DefaultPageSize, &page, All)
+	require.EqualError(t, err, "Empty response body")
+
+	// Checking logged entries
+	http500logged := false
+	http504logged := false
+	for _, e := range h.AllEntries() {
+		if e.Data["responseCode"] == "500" {
+			http500logged = true
+		}
+		if e.Data["responseCode"] == "504" {
+			http504logged = true
+		}
+	}
+
+	assert.True(t, http500logged)
+	assert.True(t, http504logged)
 }
