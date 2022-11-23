@@ -320,6 +320,12 @@ func (c Client) FetchEvents(ctx context.Context, cursors []Cursor, pageSizeHint 
 		return err
 	}
 
+	token := req.Header.Get("Authorization")
+	c.logger.WithFields(logrus.Fields{
+		"event":       "zeroeventhub.token_check",
+		"tokenLength": strconv.Itoa(len([]rune(token))),
+	}).Debug()
+
 	res, err := c.httpClient.Do(req)
 	if err != nil {
 		return err
