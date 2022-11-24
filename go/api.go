@@ -320,12 +320,6 @@ func (c Client) FetchEvents(ctx context.Context, cursors []Cursor, pageSizeHint 
 		return err
 	}
 
-	token := req.Header.Get("Authorization")
-	c.logger.WithFields(logrus.Fields{
-		"event": "zeroeventhub.token_check",
-		"token": token, // For test only!
-	}).Debug()
-
 	res, err := c.httpClient.Do(req)
 	if err != nil {
 		return err
@@ -350,6 +344,7 @@ func (c Client) FetchEvents(ctx context.Context, cursors []Cursor, pageSizeHint 
 		}
 	}
 
+	logged := false
 	scanner := bufio.NewScanner(res.Body)
 	for scanner.Scan() {
 		line := bytes.TrimSpace(scanner.Bytes())
@@ -370,6 +365,13 @@ func (c Client) FetchEvents(ctx context.Context, cursors []Cursor, pageSizeHint 
 
 		} else {
 			// event
+			if !logged {
+				c.logger.WithFields(logrus.Fields{
+					"event": "zeroeventhub.data_check",
+					"data":  parsedLine.Data,
+				}).Debug()
+				logged = true
+			}
 			if err := r.Event(parsedLine.PartitionId, parsedLine.Headers, parsedLine.Data); err != nil {
 				return err
 			}
