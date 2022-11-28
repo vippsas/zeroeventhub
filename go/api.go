@@ -339,12 +339,14 @@ func (c Client) FetchEvents(ctx context.Context, cursors []Cursor, pageSizeHint 
 			} else {
 				err = errors.Errorf("unexpected response body: %s", string(all))
 			}
-			log.WithField("event", "zeroeventhub.unexpected_response_body").WithError(err).Error()
+			log.WithFields(logrus.Fields{
+				"event":        "zeroeventhub.unexpected_response_body",
+				"responseCode": strconv.Itoa(res.StatusCode),
+			}).WithError(err).Error()
 			return err
 		}
 	}
 
-	logged := false
 	scanner := bufio.NewScanner(res.Body)
 	for scanner.Scan() {
 		line := bytes.TrimSpace(scanner.Bytes())
@@ -365,13 +367,6 @@ func (c Client) FetchEvents(ctx context.Context, cursors []Cursor, pageSizeHint 
 
 		} else {
 			// event
-			if !logged {
-				c.logger.WithFields(logrus.Fields{
-					"event": "zeroeventhub.data_check",
-					"data":  parsedLine.Data,
-				}).Debug()
-				logged = true
-			}
 			if err := r.Event(parsedLine.PartitionId, parsedLine.Headers, parsedLine.Data); err != nil {
 				return err
 			}
