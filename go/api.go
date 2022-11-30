@@ -211,7 +211,8 @@ func Handler(logger logrus.FieldLogger, api API) http.Handler {
 			serializer := NewNDJSONEventSerializer(writer)
 			err = api.FetchEvents(request.Context(), cursors, pageSizeHint, serializer, headers...)
 			if err != nil {
-				http.Error(writer, err.Error(), http.StatusInternalServerError)
+				logger.WithField("event", api.GetName()+".fetch_events_error").WithError(err).Info()
+				http.Error(writer, "Internal server error", http.StatusInternalServerError)
 				return
 			}
 		})
