@@ -152,7 +152,7 @@ func TestAPI(t *testing.T) {
 				PartitionID: 0,
 				Cursor:      "qwerty",
 			}},
-			expectedErrorString: "unexpected response body: strconv.Atoi: parsing \"qwerty\": invalid syntax\n",
+			expectedErrorString: "unexpected response body: Internal server error\n",
 		},
 		{
 			name:           "out of range cursor",
