@@ -330,7 +330,10 @@ func (c Client) FetchEvents(ctx context.Context, cursors []Cursor, pageSizeHint 
 	}(res.Body)
 
 	if res.StatusCode/100 != 2 {
-		log := c.logger.WithField("responseCode", strconv.Itoa(res.StatusCode)).WithContext(ctx)
+		log := c.logger.WithFields(logrus.Fields{
+			"responseCode": strconv.Itoa(res.StatusCode),
+			"requestUrl":   req.URL.String(),
+		}).WithContext(ctx)
 		if all, err := io.ReadAll(res.Body); err != nil {
 			log.WithField("event", "zeroeventhub.res_body_read_error").WithError(err).Error()
 			return err
