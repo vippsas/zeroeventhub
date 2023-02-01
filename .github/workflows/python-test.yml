@@ -1,0 +1,48 @@
+name: Run Python unit-tests
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - python/**
+      - .github/workflows/python-test.yml
+  pull_request:
+    paths:
+      - python/**
+      - .github/workflows/python-test.yml
+
+defaults:
+  run:
+    working-directory: ./python/zeroeventhub
+
+jobs:
+  build:
+    name: Install Python and Poetry, then lint and run tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        name: Install Python
+        with:
+          python-version: '3.10.9'
+      - name: Install and configure Poetry
+        run: |
+          pip install poetry==1.3.1
+          poetry config virtualenvs.in-project true
+      - run: poetry install --sync
+        name: Install dependencies
+      # lint
+      - run: poetry run flake8
+        name: Run flake8
+      - run: poetry run pylint zeroeventhub/
+        name: Run pylint
+      - run: poetry run mypy --disallow-untyped-defs ./zeroeventhub/
+        name: Check types
+      - run: poetry run mypy --check-untyped-defs ./tests/
+        name: Check types in tests
+      # test
+      - run: poetry run coverage run --branch -m pytest
+        name: Run unit tests
+      - run: poetry run coverage report --fail-under 98 --omit='tests/**'
+        name: Show code coverage

@@ -47,6 +47,7 @@ but the intended uses  is closer to AMQP and Kafka.
 The third component is tooling around this protocol:
 
 * [Client/server implementations for Go](go/README.md)
+* [Client implementation for Python](python/zeroeventhub/README.md)
 * [mssql-changefeed](https://github.com/vippsas/mssql-changefeed) offers 
   the primitives needed to use ZeroEventHub together with an Azure SQL database
 
