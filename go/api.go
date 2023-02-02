@@ -297,7 +297,7 @@ func (c Client) FetchEvents(ctx context.Context, cursors []Cursor, pageSizeHint 
 		return ErrCursorsMissing
 	}
 
-	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/feed/v1", c.url), nil)
+	req, err := http.NewRequest(http.MethodGet, c.url, nil)
 	if err != nil {
 		return err
 	}

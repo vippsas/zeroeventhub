@@ -68,6 +68,10 @@ for myStillWantToReadEvents {
 
 ```
 
+### Breaking changes
+
+The URL in the `NewClient` constructor must now be the full URL to the ZeroEventHub endpoint.
+Previously, the client would append `/feed/v1` to the URL given.
 
 ## Server
 

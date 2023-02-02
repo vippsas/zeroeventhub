@@ -115,9 +115,7 @@ this database is streamed as events to Event Hub.
 The publisher can then additionally make the events available in a polling
 interface, which is made available to select consumers.
 The endpoint the backend makes the API available on is not defined
-(and each backend can choose to expose several event feeds on different routes),
-but to signal that this specification is followed the suffix
-of the URI should be `..../feed/v1/`.
+(and each backend can choose to expose several event feeds on different routes).
 
 
 ### Partitions

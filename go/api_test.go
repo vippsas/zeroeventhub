@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
@@ -24,6 +25,14 @@ func mustMarshalJson(e any) json.RawMessage {
 		panic(err)
 	}
 	return result
+}
+
+func createTestClientWithPartitionCount(server *httptest.Server, partitionCount int) Client {
+	return NewClient(fmt.Sprintf("%s/feed/v1", server.URL), partitionCount)
+}
+
+func createTestClient(server *httptest.Server) Client {
+	return createTestClientWithPartitionCount(server, 2)
 }
 
 type TestEvent struct {
@@ -234,7 +243,7 @@ func TestAPI(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			var client EventFetcher = NewClient(server.URL, test.partitionCount)
+			var client EventFetcher = createTestClientWithPartitionCount(server, test.partitionCount)
 			var page EventPageSingleType[TestEvent]
 			err := client.FetchEvents(context.Background(), test.cursors, test.pageSizeHint, &page)
 			if err == nil {
@@ -250,7 +259,7 @@ func BenchmarkFeed(b *testing.B) {
 	logger := logrus.New()
 	logger.SetOutput(io.Discard)
 	server := httptest.NewServer(Handler(logger, NewTestZeroEventHubAPI()))
-	client := NewClient(server.URL, 2).WithLogger(logger)
+	client := createTestClient(server).WithLogger(logger)
 	var page EventPageSingleType[TestEvent]
 	err := client.FetchEvents(context.Background(), []Cursor{
 		{
@@ -287,7 +296,7 @@ func TestJSON(t *testing.T) {
 	loggingClient := server.Client()
 	loggingRoundTripper := loggingRoundTripper{actualRoundTripper: server.Client().Transport}
 	loggingClient.Transport = &loggingRoundTripper
-	client := NewClient(server.URL, 2).WithHttpClient(loggingClient)
+	client := createTestClient(server).WithHttpClient(loggingClient)
 	var page EventPageSingleType[TestEvent]
 	err := client.FetchEvents(context.Background(), []Cursor{
 		{
@@ -332,7 +341,7 @@ func TestNewLines(t *testing.T) {
 	}))
 
 	var page1 EventPageSingleType[TestEvent]
-	client := NewClient(server.URL+"/withNewLineAtTheEnd", 2).WithHttpClient(server.Client())
+	client := NewClient(server.URL+"/withNewLineAtTheEnd/feed/v1", 2).WithHttpClient(server.Client())
 	err := client.FetchEvents(context.Background(), []Cursor{
 		{
 			PartitionID: 0,
@@ -364,7 +373,7 @@ func TestNewLines(t *testing.T) {
 	}, page1.Events)
 
 	var page2 EventPageSingleType[TestEvent]
-	client = NewClient(server.URL+"/withoutNewLineAtTheEnd", 2).WithHttpClient(server.Client())
+	client = NewClient(server.URL+"/withoutNewLineAtTheEnd/feed/v1", 2).WithHttpClient(server.Client())
 	err = client.FetchEvents(context.Background(), []Cursor{
 		{
 			PartitionID: 0,
@@ -384,7 +393,7 @@ func TestRequestProcessor(t *testing.T) {
 	loggingClient := server.Client()
 	loggingRoundTripper := loggingRoundTripper{actualRoundTripper: server.Client().Transport}
 	loggingClient.Transport = &loggingRoundTripper
-	client := NewClient(server.URL, 2).WithHttpClient(loggingClient).WithRequestProcessor(func(r *http.Request) error {
+	client := createTestClient(server).WithHttpClient(loggingClient).WithRequestProcessor(func(r *http.Request) error {
 		r.Header.Set("content-type", "application/json")
 		return nil
 	})
@@ -397,7 +406,7 @@ func TestRequestProcessor(t *testing.T) {
 
 func TestEnvelopeHeaders(t *testing.T) {
 	server := httptest.NewServer(Handler(nil, NewTestZeroEventHubAPI()))
-	client := NewClient(server.URL, 2)
+	client := createTestClient(server)
 	var page EventPageSingleType[TestEvent]
 	err := client.FetchEvents(context.Background(), []Cursor{{Cursor: LastCursor}}, DefaultPageSize, &page, "123")
 	require.NoError(t, err)
@@ -469,7 +478,7 @@ func TestMockResponses(t *testing.T) {
 	logrus.AddHook(h)
 
 	server := httptest.NewServer(MockHandler(nil, NewTestZeroEventHubAPI()))
-	client := NewClient(server.URL, 2)
+	client := createTestClient(server)
 	var page EventPageSingleType[TestEvent]
 
 	err := client.FetchEvents(context.Background(), []Cursor{{Cursor: cursorReturn500}}, DefaultPageSize, &page, All)
