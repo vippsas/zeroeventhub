@@ -283,6 +283,34 @@ in on the next call, then it will be able to properly follow the stream of the e
   in the event feed.
 
 
+### Content type and version selection
+
+The MIME content type for a response according to this specification is:
+`application/zeh-v1` (i.e. version 1 of the ZeroEventHub specficiation).
+
+In the future new and backwards incompatible versions of this specification
+may be developed. If so, each such version will be given a new content type.
+
+Client and server can use 
+[HTTP content negotiation](https://httpwg.org/specs/rfc9110.html#field.accept)
+to make sure they agree on which version of the ZeroEventHub specification
+that will be used.
+
+Clients SHOULD include a HTTP Accept header with the value `application/zeh-v1`
+order to signal that they expect a response that conforms to this version of the
+specification. Clients MAY instead send an Accept header that includes
+`application/x-ndjson` or send no Accept header at all. If a server
+receives such a request, it should provide a response using the latest
+version of the ZeroEventHub specification that it supports.
+
+Servers SHUOLD send a Content-Type header with the value
+`application/zeh-v1` to signal that the response confirms to this
+specification. Servers MAY instead send a Content-Type header with the value
+`application/x-ndjson`. If so, it is unspecified which version
+of this specification the server supports, and this must then be
+agreed between client and server by some out-of-band means.
+
+
 ## Possible future extension: Publisher-side cursors ("consumer group")
 
 This feature can be added in particular to make it possible to add
