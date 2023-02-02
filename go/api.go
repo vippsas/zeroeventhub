@@ -161,13 +161,13 @@ func (page *EventPageSingleType[T]) Event(partitionID int, h map[string]string, 
 }
 
 // Handler wraps API in a http.Handler.
-func Handler(logger logrus.FieldLogger, api API) http.Handler {
+func Handler(path string, logger logrus.FieldLogger, api API) http.Handler {
 	if logger == nil {
 		logger = logrus.StandardLogger()
 	}
 	router := mux.NewRouter()
 	router.Methods(http.MethodGet).
-		Path("/feed/v1").
+		Path(path).
 		HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 			query := request.URL.Query()
 			if !query.Has("n") {

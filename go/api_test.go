@@ -27,12 +27,12 @@ func mustMarshalJson(e any) json.RawMessage {
 	return result
 }
 
-func createTestClientWithPartitionCount(server *httptest.Server, partitionCount int) Client {
+func createZehClientWithPartitionCount(server *httptest.Server, partitionCount int) Client {
 	return NewClient(fmt.Sprintf("%s/feed/v1", server.URL), partitionCount)
 }
 
-func createTestClient(server *httptest.Server) Client {
-	return createTestClientWithPartitionCount(server, 2)
+func createZehClient(server *httptest.Server) Client {
+	return createZehClientWithPartitionCount(server, 2)
 }
 
 type TestEvent struct {
@@ -134,7 +134,7 @@ func (t TestZeroEventHubAPI) FetchEvents(ctx context.Context, cursors []Cursor, 
 }
 
 func TestAPI(t *testing.T) {
-	server := httptest.NewServer(Handler(nil, NewTestZeroEventHubAPI()))
+	server := httptest.NewServer(Handler("/feed/v1", nil, NewTestZeroEventHubAPI()))
 	tests := []struct {
 		name string
 
@@ -243,7 +243,7 @@ func TestAPI(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			var client EventFetcher = createTestClientWithPartitionCount(server, test.partitionCount)
+			var client EventFetcher = createZehClientWithPartitionCount(server, test.partitionCount)
 			var page EventPageSingleType[TestEvent]
 			err := client.FetchEvents(context.Background(), test.cursors, test.pageSizeHint, &page)
 			if err == nil {
@@ -258,8 +258,8 @@ func TestAPI(t *testing.T) {
 func BenchmarkFeed(b *testing.B) {
 	logger := logrus.New()
 	logger.SetOutput(io.Discard)
-	server := httptest.NewServer(Handler(logger, NewTestZeroEventHubAPI()))
-	client := createTestClient(server).WithLogger(logger)
+	server := httptest.NewServer(Handler("/feed/v1", logger, NewTestZeroEventHubAPI()))
+	client := createZehClient(server).WithLogger(logger)
 	var page EventPageSingleType[TestEvent]
 	err := client.FetchEvents(context.Background(), []Cursor{
 		{
@@ -292,11 +292,11 @@ func (l *loggingRoundTripper) RoundTrip(request *http.Request) (*http.Response, 
 }
 
 func TestJSON(t *testing.T) {
-	server := httptest.NewServer(Handler(nil, NewTestZeroEventHubAPI()))
+	server := httptest.NewServer(Handler("/feed/v1", nil, NewTestZeroEventHubAPI()))
 	loggingClient := server.Client()
 	loggingRoundTripper := loggingRoundTripper{actualRoundTripper: server.Client().Transport}
 	loggingClient.Transport = &loggingRoundTripper
-	client := createTestClient(server).WithHttpClient(loggingClient)
+	client := createZehClient(server).WithHttpClient(loggingClient)
 	var page EventPageSingleType[TestEvent]
 	err := client.FetchEvents(context.Background(), []Cursor{
 		{
@@ -389,11 +389,11 @@ func TestNewLines(t *testing.T) {
 }
 
 func TestRequestProcessor(t *testing.T) {
-	server := httptest.NewServer(Handler(nil, NewTestZeroEventHubAPI()))
+	server := httptest.NewServer(Handler("/feed/v1", nil, NewTestZeroEventHubAPI()))
 	loggingClient := server.Client()
 	loggingRoundTripper := loggingRoundTripper{actualRoundTripper: server.Client().Transport}
 	loggingClient.Transport = &loggingRoundTripper
-	client := createTestClient(server).WithHttpClient(loggingClient).WithRequestProcessor(func(r *http.Request) error {
+	client := createZehClient(server).WithHttpClient(loggingClient).WithRequestProcessor(func(r *http.Request) error {
 		r.Header.Set("content-type", "application/json")
 		return nil
 	})
@@ -405,8 +405,8 @@ func TestRequestProcessor(t *testing.T) {
 }
 
 func TestEnvelopeHeaders(t *testing.T) {
-	server := httptest.NewServer(Handler(nil, NewTestZeroEventHubAPI()))
-	client := createTestClient(server)
+	server := httptest.NewServer(Handler("/feed/v1", nil, NewTestZeroEventHubAPI()))
+	client := createZehClient(server)
 	var page EventPageSingleType[TestEvent]
 	err := client.FetchEvents(context.Background(), []Cursor{{Cursor: LastCursor}}, DefaultPageSize, &page, "123")
 	require.NoError(t, err)
@@ -478,7 +478,7 @@ func TestMockResponses(t *testing.T) {
 	logrus.AddHook(h)
 
 	server := httptest.NewServer(MockHandler(nil, NewTestZeroEventHubAPI()))
-	client := createTestClient(server)
+	client := createZehClient(server)
 	var page EventPageSingleType[TestEvent]
 
 	err := client.FetchEvents(context.Background(), []Cursor{{Cursor: cursorReturn500}}, DefaultPageSize, &page, All)

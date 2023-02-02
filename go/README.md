@@ -73,6 +73,9 @@ for myStillWantToReadEvents {
 The URL in the `NewClient` constructor must now be the full URL to the ZeroEventHub endpoint.
 Previously, the client would append `/feed/v1` to the URL given.
 
+The `Handler` function now also requires a path argument. Previously, it was hardcoded to
+use the path `/feed/v1`.
+
 ## Server
 
 This library implements the transport layer, but the basic paginate-over-events
