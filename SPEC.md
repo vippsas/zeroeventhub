@@ -297,14 +297,14 @@ to make sure they agree on which version of the ZeroEventHub specification
 that will be used.
 
 Clients SHOULD include a HTTP Accept header with the value `application/zeh-v1`
-order to signal that they expect a response that conforms to this version of the
+in order to signal that they expect a response that conforms to this version of the
 specification. Clients MAY instead send an Accept header that includes
 `application/x-ndjson` or send no Accept header at all. If a server
 receives such a request, it should provide a response using the latest
 version of the ZeroEventHub specification that it supports.
 
-Servers SHUOLD send a Content-Type header with the value
-`application/zeh-v1` to signal that the response confirms to this
+Servers SHOULD send a Content-Type header with the value
+`application/zeh-v1` to signal that the response conforms to this
 specification. Servers MAY instead send a Content-Type header with the value
 `application/x-ndjson`. If so, it is unspecified which version
 of this specification the server supports, and this must then be
