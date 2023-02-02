@@ -343,7 +343,10 @@ func (c Client) FetchEvents(ctx context.Context, cursors []Cursor, pageSizeHint 
 			} else {
 				err = errors.Errorf("unexpected response body: %s", string(all))
 			}
-			log.WithField("event", "zeroeventhub.unexpected_response_body").WithError(err).Error()
+			log.WithFields(logrus.Fields{
+				"event":        "zeroeventhub.unexpected_response_body",
+				"responseCode": strconv.Itoa(res.StatusCode),
+			}).WithError(err).Error()
 			return err
 		}
 	}
