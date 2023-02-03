@@ -101,7 +101,6 @@ class Client:
         :param headers: An optional sequence containing event headers desired in the response.
         :return: the http request
         """
-        url = f"{self.url}/feed/v1"
         params: Dict[str, str | int] = {
             "n": self.partition_count,
         }
@@ -114,7 +113,7 @@ class Client:
         if headers:
             params["headers"] = ",".join(headers)
 
-        return requests.Request("GET", url, params=params).prepare()
+        return requests.Request("GET", self.url, params=params).prepare()
 
     def _process_response(self, res: requests.Response, event_receiver: EventReceiver) -> None:
         """

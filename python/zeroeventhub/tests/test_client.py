@@ -23,7 +23,7 @@ def mock_event_receiver():
 
 @pytest.fixture
 def client():
-    url = "https://example.com"
+    url = "https://example.com/feed/v1"
     partition_count = 2
     return Client(url, partition_count)
 
@@ -47,7 +47,7 @@ def test_events_fetched_successfully_when_there_are_multiple_lines_in_response(
 
     responses.add(
         responses.GET,
-        f"{client.url}/feed/v1",
+        client.url,
         content_type="application/json",
         body="""{ "partition": 1, "cursor": "5" }
         { "partition": 1, "headers": {}, "data": "some data"}\n""",
@@ -93,7 +93,7 @@ def test_raises_http_error_when_fetch_events_with_unexpected_response(client, mo
     page_size_hint = 10
     headers = ["header1", "header2"]
 
-    responses.add(responses.GET, f"{client.url}/feed/v1", status=404)
+    responses.add(responses.GET, client.url, status=404)
 
     # act & assert that a HTTPError is raised
     with pytest.raises(requests.HTTPError) as excinfo:
@@ -101,7 +101,7 @@ def test_raises_http_error_when_fetch_events_with_unexpected_response(client, mo
 
     # assert
     assert str(excinfo.value).startswith(
-        f"404 Client Error: Not Found for url: {client.url}/feed/v1?"
+        f"404 Client Error: Not Found for url: {client.url}?"
     )
 
 
@@ -119,7 +119,7 @@ def test_raises_error_when_exception_while_receiving_checkpoint(client, mock_eve
 
     responses.add(
         responses.GET,
-        f"{client.url}/feed/v1",
+        client.url,
         json={
             "partition": 0,
             "cursor": "0",
@@ -148,7 +148,7 @@ def test_raises_error_when_exception_while_receiving_event(client, mock_event_re
 
     responses.add(
         responses.GET,
-        f"{client.url}/feed/v1",
+        client.url,
         json={"partition": 0, "headers": {}, "data": "some data"},
         status=200,
     )
@@ -176,7 +176,7 @@ def test_fetch_events_succeeds_when_response_is_empty(client, mock_event_receive
 
     responses.add(
         responses.GET,
-        f"{client.url}/feed/v1",
+        client.url,
         content_type="application/json",
         body="",
         status=204,
@@ -204,7 +204,7 @@ def test_raises_error_when_response_contains_invalid_json_line(client, mock_even
 
     responses.add(
         responses.GET,
-        f"{client.url}/feed/v1",
+        client.url,
         body="""{"partition": 1,"cursor": "5"}\ninvalid json""",
         status=200,
     )
@@ -239,7 +239,7 @@ def test_owned_session_destroyed_when_client_destroyed(mock_event_receiver, mock
 
     responses.add(
         responses.GET,
-        f"{client.url}/feed/v1",
+        client.url,
         body="""{"partition": 0,"cursor": 0}\n""",
         status=200,
     )
@@ -273,7 +273,7 @@ def test_provided_session_not_destroyed_when_client_destroyed(mock_event_receive
 
     responses.add(
         responses.GET,
-        f"{client.url}/feed/v1",
+        client.url,
         body="""{"partition": 1,"cursor": "123"}\n""",
         status=200,
     )
