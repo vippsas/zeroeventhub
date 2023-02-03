@@ -1,6 +1,11 @@
-name: Run unit-tests
+name: Run Go unit-tests
 
-on: [push]
+on:
+  push:
+    branches:
+    - main
+    paths:
+    - go
 
 jobs:
   build:

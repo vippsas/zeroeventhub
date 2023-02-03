@@ -1,0 +1,7 @@
+# vim
+**/*.swp
+
+# python
+**/__pycache__/**/*
+.coverage
+dist
