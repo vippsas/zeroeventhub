@@ -113,7 +113,8 @@ class Client:
         if headers:
             params["headers"] = ",".join(headers)
 
-        return requests.Request("GET", self.url, params=params).prepare()
+        request = requests.Request("GET", self.url, params=params)
+        return self._session.prepare_request(request)
 
     def _process_response(self, res: requests.Response, event_receiver: EventReceiver) -> None:
         """

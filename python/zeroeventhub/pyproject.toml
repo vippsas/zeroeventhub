@@ -9,7 +9,7 @@ repository = "https://github.com/vippsas/zeroeventhub"
 keywords = ["event-streaming"]
 
 [tool.poetry.dependencies]
-python = "^3.10"
+python = "^3.9"
 requests = "^2.28.2"
 
 [tool.poetry.group.dev.dependencies]
