@@ -69,6 +69,5 @@ Also, to pass the CI checks, you may want to run the following before pushing yo
 ```sh
 poetry run pylint ./zeroeventhub/
 poetry run flake8
-poetry run mypy --check-untyped-defs ./tests/
-poetry run mypy --disallow-untyped-defs ./zeroeventhub/
+poetry run mypy
 ```

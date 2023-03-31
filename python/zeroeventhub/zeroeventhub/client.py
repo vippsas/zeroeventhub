@@ -1,7 +1,7 @@
 """Module containing client-side related code for ZeroEventHub"""
 
 import json
-from typing import Dict, Optional, Any, Sequence
+from typing import Dict, Optional, Any, Sequence, Union
 import requests
 
 from .cursor import Cursor
@@ -101,7 +101,7 @@ class Client:
         :param headers: An optional sequence containing event headers desired in the response.
         :return: the http request
         """
-        params: Dict[str, str | int] = {
+        params: Dict[str, Union[str, int]] = {
             "n": self.partition_count,
         }
         if page_size_hint:
