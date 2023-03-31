@@ -34,9 +34,26 @@ build-backend = "poetry.core.masonry.api"
 [tool.black]
 line-length = 100
 
+[tool.mypy]
+files = "zeroeventhub,tests"
+python_version = "3.9"
+strict = true
+warn_unreachable = true
+warn_unused_configs = true
+explicit_package_bases = true
+
 [[tool.mypy.overrides]]
 module = "mock_protocol.*"
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+# `disallow_untyped_defs` has to be explicitly disabled because it is enbaled by
+# `strict`, and just setting `check_untyped_defs` does not disable it, even
+# though it is from the same option group as `check_untyped_defs`. With it
+# enabled Mypy complains about test functions without type annotations.
+disallow_untyped_defs = false
+check_untyped_defs = true
 
 [tool.pylint.parameter_documentation]
 accept-no-param-doc = true

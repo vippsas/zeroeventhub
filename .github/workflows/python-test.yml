@@ -37,10 +37,8 @@ jobs:
         name: Run flake8
       - run: poetry run pylint zeroeventhub/
         name: Run pylint
-      - run: poetry run mypy --disallow-untyped-defs ./zeroeventhub/
+      - run: poetry run mypy
         name: Check types
-      - run: poetry run mypy --check-untyped-defs ./tests/
-        name: Check types in tests
       # test
       - run: poetry run coverage run --branch -m pytest
         name: Run unit tests
