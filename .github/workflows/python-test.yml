@@ -33,6 +33,8 @@ jobs:
       - run: poetry install --sync
         name: Install dependencies
       # lint
+      - run: poetry run black --check --diff tests/ zeroeventhub/
+        name: Run black
       - run: poetry run flake8
         name: Run flake8
       - run: poetry run pylint zeroeventhub/

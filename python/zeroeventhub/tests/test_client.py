@@ -28,12 +28,10 @@ def client():
     return Client(url, partition_count)
 
 
-@pytest.mark.parametrize("page_size_hint,headers", [
-    (10, ["header1", "header2"]),
-    (0, None),
-    (5, ["header1"]),
-    (0, ["header1"])
-])
+@pytest.mark.parametrize(
+    "page_size_hint,headers",
+    [(10, ["header1", "header2"]), (0, None), (5, ["header1"]), (0, ["header1"])],
+)
 @responses.activate
 def test_events_fetched_successfully_when_there_are_multiple_lines_in_response(
     client, mock_event_receiver, page_size_hint, headers
@@ -59,7 +57,7 @@ def test_events_fetched_successfully_when_there_are_multiple_lines_in_response(
 
     # assert
     mock_event_receiver.event.assert_called_once_with(1, {}, "some data")
-    mock_event_receiver.checkpoint.assert_called_once_with(1, '5')
+    mock_event_receiver.checkpoint.assert_called_once_with(1, "5")
 
 
 def test_raises_apierror_when_fetch_events_with_missing_cursors(client, mock_event_receiver):
@@ -100,9 +98,7 @@ def test_raises_http_error_when_fetch_events_with_unexpected_response(client, mo
         client.fetch_events(cursors, page_size_hint, mock_event_receiver, headers)
 
     # assert
-    assert str(excinfo.value).startswith(
-        f"404 Client Error: Not Found for url: {client.url}?"
-    )
+    assert str(excinfo.value).startswith(f"404 Client Error: Not Found for url: {client.url}?")
 
 
 @responses.activate

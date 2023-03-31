@@ -67,6 +67,7 @@ Then, you can open the `htmlcov/index.html` file in your browser to look at the 
 Also, to pass the CI checks, you may want to run the following before pushing your changes:
 
 ```sh
+poetry run black tests/ zeroeventhub/
 poetry run pylint ./zeroeventhub/
 poetry run flake8
 poetry run mypy --check-untyped-defs ./tests/

@@ -9,6 +9,7 @@ from .cursor import Cursor
 @dataclass
 class Event:
     """All properties received relating to a certain event."""
+
     partition_id: int
     headers: Optional[Dict[str, str]]
     data: Any
