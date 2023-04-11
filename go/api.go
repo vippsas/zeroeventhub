@@ -6,15 +6,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/gorilla/mux"
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"io"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
-
-	"github.com/gorilla/mux"
-	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
+	"time"
 )
 
 const (
@@ -56,13 +56,25 @@ type EventReceiver interface {
 	Checkpoint(partitionID int, cursor string) error
 }
 
+type Options struct {
+	PageSizeHint int
+	Wait         time.Duration
+	Stream       time.Duration
+	Headers      []string
+}
+
+func (o Options) AllHeaders() Options {
+	o.Headers = []string{All}
+	return o
+}
+
 // EventFetcher is a generic-based interface providing a contract for fetching events: both for the server side and
 // client side implementations.
 type EventFetcher interface {
 	// FetchEvents method accepts array of Cursor's along with an optional page size hint and an EventReceiver.
 	// Pass pageSizeHint = 0 for having the server choose a default / no hint.
 	// Optional `headers` argument specifies headers to be returned, or none, if it's absent.
-	FetchEvents(ctx context.Context, cursors []Cursor, pageSizeHint int, receiver EventReceiver, headers ...string) error
+	FetchEvents(ctx context.Context, cursors []Cursor, receiver EventReceiver, options Options) error
 }
 
 // API is a generic-based interface that has to be implemented on a server side.
@@ -79,17 +91,35 @@ type API interface {
 type NDJSONEventSerializer struct {
 	encoder *json.Encoder
 	writer  io.Writer
+	flusher http.Flusher
 }
 
-func NewNDJSONEventSerializer(writer io.Writer) *NDJSONEventSerializer {
+type NoopFlusher struct{}
+
+func (n NoopFlusher) Flush() {
+}
+
+func NewNDJSONEventSerializer(writer io.Writer, flush bool) *NDJSONEventSerializer {
+	var flusher http.Flusher
+	if flush {
+		flusher, _ = writer.(http.Flusher)
+	}
+	if flusher == nil {
+		flusher = NoopFlusher{}
+	}
 	return &NDJSONEventSerializer{
 		encoder: json.NewEncoder(writer),
 		writer:  writer,
+		flusher: flusher,
 	}
 }
 
 func (s NDJSONEventSerializer) writeNdJsonLine(item interface{}) error {
-	return s.encoder.Encode(item)
+	if err := s.encoder.Encode(item); err != nil {
+		return err
+	}
+	s.flusher.Flush()
+	return nil
 }
 
 func (s NDJSONEventSerializer) Checkpoint(partitionID int, cursor string) error {
@@ -171,6 +201,7 @@ func HandlerWithoutRoute(api API, getLogger func(request *http.Request) logrus.F
 			http.Error(writer, ErrHandshakePartitionCountMissing.Error(), ErrHandshakePartitionCountMissing.Status())
 			return
 		}
+
 		if n, err := strconv.Atoi(query.Get("n")); err != nil {
 			http.Error(writer, err.Error(), http.StatusBadRequest)
 			return
@@ -180,18 +211,45 @@ func HandlerWithoutRoute(api API, getLogger func(request *http.Request) logrus.F
 				return
 			}
 		}
-		var pageSizeHint int
+
+		var options Options
 		if query.Has("pagesizehint") {
 			if x, err := strconv.Atoi(query.Get("pagesizehint")); err != nil {
 				http.Error(writer, err.Error(), http.StatusBadRequest)
 				return
 			} else {
-				pageSizeHint = x
+				options.PageSizeHint = x
 			}
 		}
-		var headers []string
+
+		parseMilliseconds := func(key string) (time.Duration, error) {
+			if query.Has(key) {
+				intResult, err := strconv.Atoi(query.Get(key))
+				if err != nil {
+					return 0, err
+				}
+				return time.Duration(intResult) * time.Millisecond, nil
+			} else {
+				return 0, nil
+			}
+		}
+
+		var err error
+
+		options.Wait, err = parseMilliseconds("wait")
+		if err != nil {
+			http.Error(writer, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		options.Stream, err = parseMilliseconds("stream")
+		if err != nil {
+			http.Error(writer, err.Error(), http.StatusBadRequest)
+			return
+		}
+
 		if query.Has("headers") {
-			headers = strings.Split(strings.TrimSuffix(query.Get("headers"), ","), ",")
+			options.Headers = strings.Split(strings.TrimSuffix(query.Get("headers"), ","), ",")
 		}
 		cursors, err := parseCursors(api.GetPartitionCount(), query)
 		if err != nil {
@@ -202,11 +260,13 @@ func HandlerWithoutRoute(api API, getLogger func(request *http.Request) logrus.F
 			WithField("event", api.GetName()).
 			WithField("PartitionCount", api.GetPartitionCount()).
 			WithField("Cursors", cursors).
-			WithField("PageSizeHint", pageSizeHint).
-			WithField("Headers", headers)
+			WithField("PageSizeHint", options.PageSizeHint).
+			WithField("Headers", options.Headers).
+			WithField("Wait", options.Wait.Milliseconds()).
+			WithField("Stream", options.Stream)
 		fields.Info()
-		serializer := NewNDJSONEventSerializer(writer)
-		err = api.FetchEvents(request.Context(), cursors, pageSizeHint, serializer, headers...)
+		serializer := NewNDJSONEventSerializer(writer, options.Stream != 0)
+		err = api.FetchEvents(request.Context(), cursors, serializer, options)
 		if err != nil {
 			logger.WithField("event", api.GetName()+".fetch_events_error").WithError(err).Info()
 			http.Error(writer, "Internal server error", http.StatusInternalServerError)
@@ -307,7 +367,7 @@ type checkpointOrEvent struct {
 }
 
 // FetchEvents is a client-side implementation that queries the server and properly deserializes received data.
-func (c Client) FetchEvents(ctx context.Context, cursors []Cursor, pageSizeHint int, r EventReceiver, headers ...string) error {
+func (c Client) FetchEvents(ctx context.Context, cursors []Cursor, r EventReceiver, options Options) error {
 	if len(cursors) == 0 {
 		return ErrCursorsMissing
 	}
@@ -321,16 +381,24 @@ func (c Client) FetchEvents(ctx context.Context, cursors []Cursor, pageSizeHint 
 
 	q := req.URL.Query()
 	q.Add("n", fmt.Sprintf("%d", c.partitionCount))
-	if pageSizeHint != DefaultPageSize {
-		q.Add("pagesizehint", fmt.Sprintf("%d", pageSizeHint))
+	if options.PageSizeHint != DefaultPageSize {
+		q.Add("pagesizehint", fmt.Sprintf("%d", options.PageSizeHint))
 	}
 	for _, cursor := range cursors {
 		q.Add(fmt.Sprintf("cursor%d", cursor.PartitionID), fmt.Sprintf("%s", cursor.Cursor))
 	}
-	if len(headers) != 0 {
-		q.Add("headers", strings.Join(headers, ","))
+	if len(options.Headers) != 0 {
+		q.Add("headers", strings.Join(options.Headers, ","))
 	}
 	req.URL.RawQuery = q.Encode()
+
+	if options.Stream != 0 {
+		q.Add("stream", fmt.Sprintf("%d", options.Stream.Milliseconds()))
+	}
+
+	if options.Wait != 0 {
+		q.Add("wait", fmt.Sprintf("%d", options.Wait.Milliseconds()))
+	}
 
 	if err := c.requestProcessor(req); err != nil {
 		return err
