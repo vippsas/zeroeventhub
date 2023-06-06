@@ -2,7 +2,6 @@ package zeroeventhub
 
 import (
 	"fmt"
-	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
 	"net/http"
 	"net/url"
@@ -20,80 +19,80 @@ type EventPublisher interface {
 	EventFetcher
 }
 
-// HandlerWithoutRoute wraps EventPublisher in a http.Handler that implements the
-// ZeroEventHub HTTP protocol. The path/method is not checked. Use this method
-// to plug a handler into your own service routing.
-func HandlerWithoutRoute(api EventPublisher, getLogger func(request *http.Request) logrus.FieldLogger) http.Handler {
-	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		logger := getLogger(request)
-		query := request.URL.Query()
-		if !query.Has("n") {
-			http.Error(writer, ErrHandshakePartitionCountMissing.Error(), ErrHandshakePartitionCountMissing.Status())
+// HTTPHandlers wraps eventPublisher to provide what you need for HTTP server, implementing
+// both protocols version 1 and 2. It is required that you install two handlers: DiscoveryHandler
+// and FetchEventsHandler. The first one is put on an endpoint of your own choosing; the
+// latter should be installed at `/events` relative to the first one.
+type HTTPHandlers struct {
+	EventPublisher    EventPublisher
+	LoggerFromRequest func(*http.Request) logrus.FieldLogger
+}
+
+// DiscoveryHandler should be handling GET requests on the main URL of your FeedAPI
+// endpoint. Note: It will also serve events in v1 of the protocol.
+func (h HTTPHandlers) DiscoveryHandler(writer http.ResponseWriter, request *http.Request) {
+	query := request.URL.Query()
+	if query.Has("n") {
+		// version 1 of the protocol, "ZeroEventHub"
+		h.ZeroEventHubV1Handler(writer, request)
+		return
+	}
+
+	writer.WriteHeader(http.StatusNotImplemented)
+}
+
+func (h HTTPHandlers) ZeroEventHubV1Handler(writer http.ResponseWriter, request *http.Request) {
+	logger := h.LoggerFromRequest(request)
+	query := request.URL.Query()
+	if !query.Has("n") {
+		http.Error(writer, ErrHandshakePartitionCountMissing.Error(), ErrHandshakePartitionCountMissing.Status())
+		return
+	}
+	if n, err := strconv.Atoi(query.Get("n")); err != nil {
+		http.Error(writer, err.Error(), http.StatusBadRequest)
+		return
+	} else {
+		if n != h.EventPublisher.GetPartitionCount() {
+			http.Error(writer, ErrHandshakePartitionCountMismatch.Error(), ErrHandshakePartitionCountMismatch.Status())
 			return
 		}
-		if n, err := strconv.Atoi(query.Get("n")); err != nil {
+	}
+	var pageSizeHint int
+	if query.Has("pagesizehint") {
+		if x, err := strconv.Atoi(query.Get("pagesizehint")); err != nil {
 			http.Error(writer, err.Error(), http.StatusBadRequest)
 			return
 		} else {
-			if n != api.GetPartitionCount() {
-				http.Error(writer, ErrHandshakePartitionCountMismatch.Error(), ErrHandshakePartitionCountMismatch.Status())
-				return
-			}
+			pageSizeHint = x
 		}
-		var pageSizeHint int
-		if query.Has("pagesizehint") {
-			if x, err := strconv.Atoi(query.Get("pagesizehint")); err != nil {
-				http.Error(writer, err.Error(), http.StatusBadRequest)
-				return
-			} else {
-				pageSizeHint = x
-			}
-		}
-		var headers []string
-		if query.Has("headers") {
-			headers = strings.Split(strings.TrimSuffix(query.Get("headers"), ","), ",")
-		}
-		cursors, err := parseCursors(api.GetPartitionCount(), query)
-		if err != nil {
-			http.Error(writer, err.Error(), http.StatusBadRequest)
-			return
-		}
-		fields := logger.
-			WithField("event", api.GetName()).
-			WithField("PartitionCount", api.GetPartitionCount()).
-			WithField("Cursors", cursors).
-			WithField("PageSizeHint", pageSizeHint).
-			WithField("Headers", headers)
-		fields.Info()
-		serializer := NewNDJSONEventSerializer(writer)
-		err = api.FetchEvents(request.Context(), cursors, pageSizeHint, serializer, headers...)
-		if err != nil {
-			logger.WithField("event", api.GetName()+".fetch_events_error").WithError(err).Info()
-			http.Error(writer, "Internal server error", http.StatusInternalServerError)
-			return
-		}
-	})
+	}
+	var headers []string
+	if query.Has("headers") {
+		headers = strings.Split(strings.TrimSuffix(query.Get("headers"), ","), ",")
+	}
+	cursors, err := parseCursors(h.EventPublisher.GetPartitionCount(), query)
+	if err != nil {
+		http.Error(writer, err.Error(), http.StatusBadRequest)
+		return
+	}
+	fields := logger.
+		WithField("event", h.EventPublisher.GetName()).
+		WithField("PartitionCount", h.EventPublisher.GetPartitionCount()).
+		WithField("Cursors", cursors).
+		WithField("PageSizeHint", pageSizeHint).
+		WithField("Headers", headers)
+	fields.Info()
+	serializer := NewNDJSONEventSerializer(writer)
+	err = h.EventPublisher.FetchEvents(request.Context(), cursors, pageSizeHint, serializer, headers...)
+	if err != nil {
+		logger.WithField("event", h.EventPublisher.GetName()+".fetch_events_error").WithError(err).Info()
+		http.Error(writer, "Internal server error", http.StatusInternalServerError)
+		return
+	}
 }
 
-// Handler wraps EventPublisher in a http.Handler that checks the path and method (GET)
-// in addition to serving the feed like HandlerWithoutRoute does.
-// Note: `logger` is also hardcoded if you use this function; use HandlerWithoutRoute
-// directly to also be able to configure the logger per request to e.g.
-// include request IDs in log output.
-func Handler(path string, logger logrus.FieldLogger, api EventPublisher) http.Handler {
-	if logger == nil {
-		logger = logrus.StandardLogger()
-	}
-	getLogger := func(*http.Request) logrus.FieldLogger {
-		return logger
-	}
-	router := mux.NewRouter()
-	router.Methods(http.MethodGet).
-		Path(path).
-		Handler(HandlerWithoutRoute(api, getLogger))
-	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		router.ServeHTTP(writer, request)
-	})
+func (h HTTPHandlers) EventsHandler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
 }
 
 func parseCursors(partitionCount int, query url.Values) (cursors []Cursor, err error) {
