@@ -34,4 +34,5 @@ var (
 	ErrHandshakePartitionCountMismatch = NewAPIError("handshake error: partition count mismatch", http.StatusBadRequest)
 	ErrCursorsMissing                  = NewAPIError("cursors are missing", http.StatusBadRequest)
 	ErrPartitionDoesntExist            = NewAPIError("partition doesn't exist", http.StatusBadRequest)
+	ErrIllegalToken                    = NewAPIError("illegal token, please fetch new from discovery endpoint", http.StatusConflict)
 )

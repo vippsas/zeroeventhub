@@ -26,9 +26,13 @@ type Cursor struct {
 // Checkpoint in this context is basically a cursor.
 type EventReceiver interface {
 	// Event method processes actual events.
-	Event(partitionID int, headers map[string]string, Data json.RawMessage) error
+	Event(Data json.RawMessage) error
 	// Checkpoint method processes cursors.
-	Checkpoint(partitionID int, cursor string) error
+	Checkpoint(cursor string) error
+}
+
+type Options struct {
+	PageSizeHint int
 }
 
 // EventFetcher is a generic-based interface providing a contract for fetching events: both for the server side and
@@ -37,5 +41,5 @@ type EventFetcher interface {
 	// FetchEvents method accepts array of Cursor's along with an optional page size hint and an EventReceiver.
 	// Pass pageSizeHint = 0 for having the server choose a default / no hint.
 	// Optional `headers` argument specifies headers to be returned, or none, if it's absent.
-	FetchEvents(ctx context.Context, cursors []Cursor, pageSizeHint int, receiver EventReceiver, headers ...string) error
+	FetchEvents(ctx context.Context, token string, partitionID int, cursor string, receiver EventReceiver, options Options) error
 }

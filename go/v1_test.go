@@ -35,111 +35,68 @@ type TestZeroEventHubAPI struct {
 	partitions map[int][]TestEvent
 }
 
-func TestAPI(t *testing.T) {
+func TestAPI_V1(t *testing.T) {
 	server := Server(NewTestZeroEventHubAPI())
 	tests := []struct {
 		name string
 
 		partitionCount int
 		pageSizeHint   int
-		cursors        []Cursor
+		partitionID    int
+		cursor         string
 
 		expectedEvents      int
 		expectedErrorString string
 	}{
 		{
-			name:           "wrong partition count",
-			partitionCount: 1,
-			cursors: []Cursor{{
-				PartitionID: 0,
-				Cursor:      "qwerty",
-			}},
+			name:                "wrong partition count",
+			partitionCount:      1,
+			partitionID:         0,
+			cursor:              "qwerty",
 			expectedErrorString: "unexpected response body: handshake error: partition count mismatch\n",
 		},
 		{
-			name:           "wrong cursor",
-			partitionCount: 2,
-			cursors: []Cursor{{
-				PartitionID: 0,
-				Cursor:      "qwerty",
-			}},
+			name:                "wrong cursor",
+			partitionCount:      2,
+			partitionID:         0,
+			cursor:              "qwerty",
 			expectedErrorString: "unexpected response body: Internal server error\n",
 		},
 		{
 			name:           "out of range cursor",
 			partitionCount: 2,
-			cursors: []Cursor{{
-				PartitionID: 0,
-				Cursor:      "20000",
-			}},
+			partitionID:    0,
+			cursor:         "20000",
 			expectedEvents: 0,
 		},
 		{
 			name:           "_first special cursor",
 			partitionCount: 2,
-			cursors: []Cursor{{
-				PartitionID: 0,
-				Cursor:      FirstCursor,
-			}},
+			partitionID:    0,
+			cursor:         FirstCursor,
 			expectedEvents: 100,
 		},
 		{
 			name:           "_last special cursor",
 			partitionCount: 2,
-			cursors: []Cursor{{
-				PartitionID: 0,
-				Cursor:      LastCursor,
-			}},
+			partitionID:    0,
+			cursor:         LastCursor,
 			expectedEvents: 1,
-		},
-		{
-			name:           "both special cursors",
-			partitionCount: 2,
-			cursors: []Cursor{
-				{
-					PartitionID: 0,
-					Cursor:      FirstCursor,
-				},
-				{
-					PartitionID: 1,
-					Cursor:      LastCursor,
-				},
-			},
-			expectedEvents: 101,
-		},
-		{
-			name:           "regular cursors",
-			partitionCount: 2,
-			cursors: []Cursor{
-				{
-					PartitionID: 0,
-					Cursor:      "123",
-				},
-				{
-					PartitionID: 1,
-					Cursor:      "456",
-				},
-			},
-			expectedEvents: 200,
 		},
 		{
 			name:           "pagesizehint 10000, full page",
 			partitionCount: 2,
 			pageSizeHint:   10000,
-			cursors: []Cursor{{
-				PartitionID: 0,
-				Cursor:      FirstCursor,
-			}},
+			partitionID:    0,
+			cursor:         FirstCursor,
 			expectedEvents: 10000,
 		},
 		{
 			name:           "pagesizehint 10000, half page",
 			partitionCount: 2,
 			pageSizeHint:   10000,
-			cursors: []Cursor{{
-				PartitionID: 0,
-				Cursor:      "4999",
-			}},
+			partitionID:    0,
+			cursor:         "4999",
 			expectedEvents: 5000,
 		},
 	}
@@ -147,7 +104,10 @@ func TestAPI(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			var client EventFetcher = createZehClientWithPartitionCount(server, test.partitionCount)
 			var page EventPageSingleType[TestEvent]
-			err := client.FetchEvents(context.Background(), test.cursors, test.pageSizeHint, &page)
+			token := fmt.Sprintf("%d", test.partitionCount)
+			err := client.FetchEvents(context.Background(), token, test.partitionID, test.cursor, &page, Options{
+				PageSizeHint: test.pageSizeHint,
+			})
 			if err == nil {
 				require.Equal(t, test.expectedEvents, len(page.Events))
 			} else {
@@ -155,25 +115,6 @@ func TestAPI(t *testing.T) {
 			}
 		})
 	}
-}
-
-func BenchmarkFeed(b *testing.B) {
-	logger := logrus.New()
-	logger.SetOutput(io.Discard)
-	server := Server(NewTestZeroEventHubAPI())
-	client := createZehClient(server).WithLogger(logger)
-	var page EventPageSingleType[TestEvent]
-	err := client.FetchEvents(context.Background(), []Cursor{
-		{
-			PartitionID: 0,
-			Cursor:      FirstCursor,
-		},
-		{
-			PartitionID: 1,
-			Cursor:      FirstCursor,
-		},
-	}, 1, &page)
-	require.NoError(b, err)
 }
 
 type loggingRoundTripper struct {
@@ -200,21 +141,10 @@ func TestJSON(t *testing.T) {
 	loggingClient.Transport = &loggingRoundTripper
 	client := createZehClient(server).WithHttpClient(loggingClient)
 	var page EventPageSingleType[TestEvent]
-	err := client.FetchEvents(context.Background(), []Cursor{
-		{
-			PartitionID: 0,
-			Cursor:      "9998",
-		},
-		{
-			PartitionID: 1,
-			Cursor:      "9998",
-		},
-	}, DefaultPageSize, &page)
+	err := client.FetchEvents(context.Background(), "2", 0, "9998", &page, Options{})
 	require.NoError(t, err)
-	require.Equal(t, `{"partition":0,"data":{"ID":"00000000-0000-0000-0000-00000000270f","Version":0,"Cursor":9999}}
-{"partition":0,"cursor":"9999"}
-{"partition":1,"data":{"ID":"11111111-0000-0000-0000-00000000270f","Version":0,"Cursor":9999}}
-{"partition":1,"cursor":"9999"}
+	require.Equal(t, `{"data":{"ID":"00000000-0000-0000-0000-00000000270f","Version":0,"Cursor":9999}}
+{"cursor":"9999"}
 `, loggingRoundTripper.response)
 	fmt.Print(loggingRoundTripper.response)
 }
@@ -244,48 +174,23 @@ func TestNewLines(t *testing.T) {
 
 	var page1 EventPageSingleType[TestEvent]
 	client := NewClient(server.URL+"/withNewLineAtTheEnd/feed/v1", 2).WithHttpClient(server.Client())
-	err := client.FetchEvents(context.Background(), []Cursor{
-		{
-			PartitionID: 0,
-			Cursor:      "9999",
-		},
-		{
-			PartitionID: 1,
-			Cursor:      "9999",
-		},
-	}, DefaultPageSize, &page1)
+	err := client.FetchEvents(context.Background(), "1", 0, "9999", &page1, Options{})
 	require.NoError(t, err)
 
-	require.Equal(t, []TypedEnvelope[TestEvent]{
+	require.Equal(t, []TestEvent{
 		{
-			Headers: map[string]string{"h1": "v1"},
-			Data: TestEvent{
-				ID:     "414e0173-c3e5-4935-a59d-15e4d3c462e0",
-				Cursor: 9999,
-			},
+			ID:     "414e0173-c3e5-4935-a59d-15e4d3c462e0",
+			Cursor: 9999,
 		},
 		{
-			PartitionID: 1,
-			Headers:     map[string]string{"h2": "v2"},
-			Data: TestEvent{
-				ID:     "a79e2138-64df-4493-8ca5-bc84f6bb31c1",
-				Cursor: 9999,
-			},
+			ID:     "a79e2138-64df-4493-8ca5-bc84f6bb31c1",
+			Cursor: 9999,
 		},
 	}, page1.Events)
 
 	var page2 EventPageSingleType[TestEvent]
 	client = NewClient(server.URL+"/withoutNewLineAtTheEnd/feed/v1", 2).WithHttpClient(server.Client())
-	err = client.FetchEvents(context.Background(), []Cursor{
-		{
-			PartitionID: 0,
-			Cursor:      "9999",
-		},
-		{
-			PartitionID: 1,
-			Cursor:      "9999",
-		},
-	}, DefaultPageSize, &page2)
+	err = client.FetchEvents(context.Background(), "", 0, "9999", &page2, Options{})
 	require.NoError(t, err)
 	require.Equal(t, page1, page2)
 }
@@ -300,36 +205,10 @@ func TestRequestProcessor(t *testing.T) {
 		return nil
 	})
 	var page EventPageSingleType[TestEvent]
-	err := client.FetchEvents(context.Background(), []Cursor{{Cursor: LastCursor}}, DefaultPageSize, &page)
+	err := client.FetchEvents(context.Background(), "", 0, LastCursor, &page, Options{})
 	require.NoError(t, err)
 	require.NotNil(t, loggingRoundTripper.requestHeaders)
 	require.Equal(t, "application/json", loggingRoundTripper.requestHeaders.Get("content-type"))
-}
-
-func TestEnvelopeHeaders(t *testing.T) {
-	server := Server(NewTestZeroEventHubAPI())
-	client := createZehClient(server)
-	var page EventPageSingleType[TestEvent]
-	err := client.FetchEvents(context.Background(), []Cursor{{Cursor: LastCursor}}, DefaultPageSize, &page, "123")
-	require.NoError(t, err)
-	require.Len(t, page.Events, 1)
-	require.Len(t, page.Cursors, 1)
-	require.Empty(t, page.Events[0].Headers)
-	page = EventPageSingleType[TestEvent]{}
-	err = client.FetchEvents(context.Background(), []Cursor{{Cursor: LastCursor}}, DefaultPageSize, &page, "content-type")
-	require.NoError(t, err)
-	require.Len(t, page.Events, 1)
-	require.Len(t, page.Cursors, 1)
-	require.Len(t, page.Events[0].Headers, 1)
-	require.Equal(t, "application/json", page.Events[0].Headers["content-type"])
-	page = EventPageSingleType[TestEvent]{}
-	err = client.FetchEvents(context.Background(), []Cursor{{Cursor: LastCursor}}, DefaultPageSize, &page, All)
-	require.NoError(t, err)
-	require.Len(t, page.Events, 1)
-	require.Len(t, page.Cursors, 1)
-	require.Len(t, page.Events[0].Headers, 2)
-	require.Equal(t, "application/json", page.Events[0].Headers["content-type"])
-	require.Equal(t, "bar", page.Events[0].Headers["foo"])
 }
 
 // Variables for mocking responses
@@ -352,14 +231,18 @@ func MockHandler(logger logrus.FieldLogger, api EventPublisher) http.Handler {
 		}
 
 		query := request.URL.Query()
-		cursors, err := parseCursors(api.GetPartitionCount(), query)
-		if err != nil {
-			http.Error(writer, err.Error(), http.StatusBadRequest)
+		cursors := parseCursors(api.GetPartitionCount(), query)
+		if len(cursors) == 0 {
+			http.Error(writer, ErrCursorsMissing.message, http.StatusBadRequest)
+			return
+		}
+		if len(cursors) > 1 {
+			http.Error(writer, "too many cursors (deprecated)", http.StatusBadRequest)
 			return
 		}
 
 		serializer := NewNDJSONEventSerializer(writer)
-		err = api.FetchEvents(request.Context(), cursors, 10, serializer, All)
+		err := api.FetchEvents(request.Context(), "", cursors[0].PartitionID, cursors[0].Cursor, serializer, Options{})
 		switch err {
 		case err500:
 			http.Error(writer, err.Error(), http.StatusInternalServerError)
@@ -383,9 +266,9 @@ func TestMockResponses(t *testing.T) {
 	client := createZehClient(server)
 	var page EventPageSingleType[TestEvent]
 
-	err := client.FetchEvents(context.Background(), []Cursor{{Cursor: cursorReturn500}}, DefaultPageSize, &page, All)
+	err := client.FetchEvents(context.Background(), "", 0, cursorReturn500, &page, Options{})
 	require.EqualError(t, err, "unexpected response body: error when fetching events\n")
-	err = client.FetchEvents(context.Background(), []Cursor{{Cursor: cursorReturn504}}, DefaultPageSize, &page, All)
+	err = client.FetchEvents(context.Background(), "", 0, cursorReturn504, &page, Options{})
 	require.EqualError(t, err, "empty response body")
 
 	// Checking logged entries
