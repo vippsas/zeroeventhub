@@ -70,60 +70,46 @@ func (t TestZeroEventHubAPI) GetPartitionCount() int {
 	return 2
 }
 
-func (t TestZeroEventHubAPI) FetchEvents(ctx context.Context, cursors []Cursor, pageSizeHint int, r EventReceiver, headers ...string) error {
-	if pageSizeHint == DefaultPageSize {
-		pageSizeHint = 100
+func (t TestZeroEventHubAPI) FetchEvents(ctx context.Context, token string, partitionID int, cursor string, receiver EventReceiver, options Options) error {
+	if options.PageSizeHint == DefaultPageSize {
+		options.PageSizeHint = 100
 	}
-	for _, cursor := range cursors {
-		partition, ok := t.partitions[cursor.PartitionID]
-		if !ok {
-			return ErrPartitionDoesntExist
+	partition, ok := t.partitions[partitionID]
+	if !ok {
+		return ErrPartitionDoesntExist
+	}
+	var err error
+	var lastProcessedCursor int
+	switch cursor {
+	case FirstCursor:
+		lastProcessedCursor = -100
+	case LastCursor:
+		lastProcessedCursor = len(partition) - 2
+	// Mock responses: set the cursor to one of the following values to get a mocked response.
+	case cursorReturn500:
+		return err500
+	case cursorReturn504:
+		return err504
+	default:
+		lastProcessedCursor, err = strconv.Atoi(cursor)
+		if err != nil {
+			return err
 		}
-		var err error
-		var lastProcessedCursor int
-		switch cursor.Cursor {
-		case FirstCursor:
-			lastProcessedCursor = -100
-		case LastCursor:
-			lastProcessedCursor = len(partition) - 2
-		// Mock responses: set the cursor to one of the following values to get a mocked response.
-		case cursorReturn500:
-			return err500
-		case cursorReturn504:
-			return err504
-		default:
-			lastProcessedCursor, err = strconv.Atoi(cursor.Cursor)
-			if err != nil {
+	}
+	eventsProcessed := 0
+	for _, event := range partition {
+		if event.Cursor > lastProcessedCursor {
+			if err := receiver.Event(mustMarshalJson(partition[event.Cursor])); err != nil {
 				return err
 			}
+			if err := receiver.Checkpoint(fmt.Sprintf("%d", event.Cursor)); err != nil {
+				return err
+			}
+			lastProcessedCursor = event.Cursor
+			eventsProcessed++
 		}
-		eventsProcessed := 0
-		h := make(map[string]string, 1)
-		for _, header := range headers {
-			if header == "content-type" {
-				h["content-type"] = "application/json"
-				break
-			}
-			if header == All {
-				h["content-type"] = "application/json"
-				h["foo"] = "bar"
-				break
-			}
-		}
-		for _, event := range partition {
-			if event.Cursor > lastProcessedCursor {
-				if err := r.Event(cursor.PartitionID, h, mustMarshalJson(partition[event.Cursor])); err != nil {
-					return err
-				}
-				if err := r.Checkpoint(cursor.PartitionID, fmt.Sprintf("%d", event.Cursor)); err != nil {
-					return err
-				}
-				lastProcessedCursor = event.Cursor
-				eventsProcessed++
-			}
-			if eventsProcessed == pageSizeHint {
-				break
-			}
+		if eventsProcessed == options.PageSizeHint {
+			break
 		}
 	}
 	return nil

@@ -11,7 +11,6 @@ import (
 	"io"
 	"net/http"
 	"strconv"
-	"strings"
 )
 
 // Client struct is a generic-based client-side implementation of the EventFetcher interface.
@@ -59,7 +58,7 @@ func (c Client) WithLogger(logger logrus.FieldLogger) (r Client) {
 }
 
 // FetchEvents is a client-side implementation that queries the server and properly deserializes received data.
-func (c Client) FetchEvents(ctx context.Context, cursors []Cursor, pageSizeHint int, r EventReceiver, headers ...string) error {
+func (c Client) FetchEvents(ctx context.Context, token string, partitionID int, cursor string, r EventReceiver, options Options) error {
 	type checkpointOrEvent struct {
 		PartitionId int `json:"partition"`
 		// either this is set:
@@ -67,10 +66,6 @@ func (c Client) FetchEvents(ctx context.Context, cursors []Cursor, pageSizeHint 
 		// OR, these are set:
 		Headers map[string]string `json:"headers"`
 		Data    json.RawMessage   `json:"data"`
-	}
-
-	if len(cursors) == 0 {
-		return ErrCursorsMissing
 	}
 
 	req, err := http.NewRequest(http.MethodGet, c.url, nil)
@@ -82,15 +77,10 @@ func (c Client) FetchEvents(ctx context.Context, cursors []Cursor, pageSizeHint 
 
 	q := req.URL.Query()
 	q.Add("n", fmt.Sprintf("%d", c.partitionCount))
-	if pageSizeHint != DefaultPageSize {
-		q.Add("pagesizehint", fmt.Sprintf("%d", pageSizeHint))
+	if options.PageSizeHint != DefaultPageSize {
+		q.Add("pagesizehint", fmt.Sprintf("%d", options.PageSizeHint))
 	}
-	for _, cursor := range cursors {
-		q.Add(fmt.Sprintf("cursor%d", cursor.PartitionID), fmt.Sprintf("%s", cursor.Cursor))
-	}
-	if len(headers) != 0 {
-		q.Add("headers", strings.Join(headers, ","))
-	}
+	q.Add(fmt.Sprintf("cursor%d", partitionID), cursor)
 	req.URL.RawQuery = q.Encode()
 
 	if err := c.requestProcessor(req); err != nil {
@@ -138,13 +128,13 @@ func (c Client) FetchEvents(ctx context.Context, cursors []Cursor, pageSizeHint 
 		}
 		if parsedLine.Cursor != "" {
 			// checkpoint
-			if err := r.Checkpoint(parsedLine.PartitionId, parsedLine.Cursor); err != nil {
+			if err := r.Checkpoint(parsedLine.Cursor); err != nil {
 				return err
 			}
 
 		} else {
 			// event
-			if err := r.Event(parsedLine.PartitionId, parsedLine.Headers, parsedLine.Data); err != nil {
+			if err := r.Event(parsedLine.Data); err != nil {
 				return err
 			}
 		}

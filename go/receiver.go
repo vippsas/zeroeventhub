@@ -12,12 +12,6 @@ type Envelope struct {
 	Data        json.RawMessage   `json:"data,omitempty"`
 }
 
-type TypedEnvelope[T any] struct {
-	PartitionID int               `json:"partition"`
-	Headers     map[string]string `json:"headers,omitempty"`
-	Data        T                 `json:"data"`
-}
-
 // NDJSONEventSerializer implements EventReceiver by emitting Newline-Delimited-JSON to a writer.
 type NDJSONEventSerializer struct {
 	encoder *json.Encoder
@@ -35,19 +29,18 @@ func (s NDJSONEventSerializer) writeNdJsonLine(item interface{}) error {
 	return s.encoder.Encode(item)
 }
 
-func (s NDJSONEventSerializer) Checkpoint(partitionID int, cursor string) error {
-	return s.writeNdJsonLine(Cursor{
-		PartitionID: partitionID,
-		Cursor:      cursor,
-	})
+func (s NDJSONEventSerializer) Checkpoint(cursor string) error {
+	type CursorMessage struct {
+		Cursor string `json:"cursor"`
+	}
+	return s.writeNdJsonLine(CursorMessage{Cursor: cursor})
 }
 
-func (s NDJSONEventSerializer) Event(partitionID int, headers map[string]string, data json.RawMessage) error {
-	return s.writeNdJsonLine(Envelope{
-		PartitionID: partitionID,
-		Headers:     headers,
-		Data:        data,
-	})
+func (s NDJSONEventSerializer) Event(data json.RawMessage) error {
+	type EventMessage struct {
+		Data json.RawMessage `json:"data"`
+	}
+	return s.writeNdJsonLine(EventMessage{Data: data})
 }
 
 var _ EventReceiver = &NDJSONEventSerializer{}
@@ -80,25 +73,20 @@ func (page *EventPageRaw) Event(partitionID int, h map[string]string, d json.Raw
 // EventPageSingleType is like EventPageRaw, but parses the JSON into a single struct
 // type. Useful if all the events on the feed have the same format.
 type EventPageSingleType[T any] struct {
-	Events  []TypedEnvelope[T]
-	Cursors map[int]string
+	Events []T
+	Cursor string
 }
 
-func (page *EventPageSingleType[T]) Checkpoint(partitionID int, cursor string) error {
-	if page.Cursors == nil {
-		page.Cursors = make(map[int]string)
-	}
-	page.Cursors[partitionID] = cursor
+func (page *EventPageSingleType[T]) Checkpoint(cursor string) error {
+	page.Cursor = cursor
 	return nil
 }
 
-func (page *EventPageSingleType[T]) Event(partitionID int, h map[string]string, d json.RawMessage) error {
-	var e TypedEnvelope[T]
-	e.PartitionID = partitionID
-	e.Headers = h
-	if err := json.Unmarshal(d, &e.Data); err != nil {
+func (page *EventPageSingleType[T]) Event(d json.RawMessage) error {
+	var data T
+	if err := json.Unmarshal(d, &data); err != nil {
 		return err
 	}
-	page.Events = append(page.Events, e)
+	page.Events = append(page.Events, data)
 	return nil
 }
