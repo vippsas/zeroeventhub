@@ -55,7 +55,7 @@ while myStillWantToReadEvents:
 
 To run the test suite, assuming you already have Python 3.10 or later installed and on your `PATH`:
 ```sh
-pip install poetry==1.3.1
+pip install poetry==1.5.1
 poetry config virtualenvs.in-project true
 poetry install --sync
 poetry run coverage run --branch -m pytest
