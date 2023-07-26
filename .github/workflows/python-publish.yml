@@ -5,10 +5,7 @@ on:
     branches:
       - main
     tags:
-      - v*
-    paths:
-      - python/**
-      - .github/workflows/python-publish.yml
+      - python/v*
 
 defaults:
   run:
