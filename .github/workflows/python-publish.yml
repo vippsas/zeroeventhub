@@ -1,0 +1,40 @@
+name: Publish Python client to PyPI
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - v*
+    paths:
+      - python/**
+      - .github/workflows/python-publish.yml
+
+defaults:
+  run:
+    working-directory: ./python/zeroeventhub
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11.4'
+      - name: Install and configure Poetry
+        run: |
+          pip install poetry==1.5.1
+          poetry config virtualenvs.in-project true
+      - name: Install dependencies
+        run: poetry install --sync --only=main
+      - name: Build package
+        run: poetry build
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
