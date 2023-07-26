@@ -2,8 +2,6 @@ name: Publish Python client to PyPI
 
 on:
   push:
-    branches:
-      - main
     tags:
       - python/v*
 
