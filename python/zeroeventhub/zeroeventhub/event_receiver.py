@@ -1,6 +1,6 @@
 """Module to define the EventReceiver interface"""
 
-from typing import Protocol, Dict, Any, Optional, Union
+from typing import Protocol, Union
 from collections.abc import AsyncGenerator
 from .cursor import Cursor
 from .event import Event
@@ -13,21 +13,18 @@ class EventReceiver(Protocol):
     Checkpoint in this context is basically a cursor.
     """
 
-    async def event(self, partition_id: int, headers: Optional[Dict[str, str]], data: Any) -> None:
+    async def event(self, event: Event) -> None:
         """
         Event method processes actual events.
 
-        :param partition_id: the partition id
-        :param headers: the headers
-        :param data: the data
+        :param event: the details of the event which has been received from the server
         """
 
-    async def checkpoint(self, partition_id: int, cursor: str) -> None:
+    async def checkpoint(self, checkpoint: Cursor) -> None:
         """
         Checkpoint method processes cursors.
 
-        :param partition_id: the partition id
-        :param cursor: the cursor
+        :param checkpoint: the checkpoint which was received from the server
         """
 
 
@@ -36,14 +33,14 @@ async def receive_events(
 ) -> None:
     """bridge between the output from the Client fetch_events return value
     and the EventReceiver interface."""
-    async for event in events:
-        if isinstance(event, Cursor):
+    async for event_or_checkpoint in events:
+        if isinstance(event_or_checkpoint, Cursor):
             try:
-                await event_receiver.checkpoint(event.partition_id, event.cursor)
+                await event_receiver.checkpoint(event_or_checkpoint)
             except Exception as error:
                 raise ValueError("error while receiving checkpoint") from error
         else:
             try:
-                await event_receiver.event(event.partition_id, event.headers, event.data)
+                await event_receiver.event(event_or_checkpoint)
             except Exception as error:
                 raise ValueError("error while receiving event") from error

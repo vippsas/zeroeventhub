@@ -9,6 +9,7 @@ from typing import Any, AsyncGenerator, AsyncIterator, Iterable
 from zeroeventhub import (
     Client,
     Cursor,
+    Event,
     APIError,
     EventReceiver,
     FIRST_CURSOR,
@@ -74,8 +75,8 @@ async def test_events_fetched_successfully_when_there_are_multiple_lines_in_resp
     await receive_events(mock_event_receiver, client.fetch_events(cursors, page_size_hint, headers))
 
     # assert
-    mock_event_receiver.event.assert_called_once_with(1, {}, "some data")
-    mock_event_receiver.checkpoint.assert_called_once_with(1, "5")
+    mock_event_receiver.event.assert_called_once_with(Event(1, {}, "some data"))
+    mock_event_receiver.checkpoint.assert_called_once_with(Cursor(1, "5"))
 
 
 async def test_raises_apierror_when_fetch_events_with_missing_cursors(client):
@@ -288,7 +289,7 @@ async def test_raises_error_when_response_contains_invalid_json_line(
         )
 
     # assert that the checkpoint method was called for the first response line
-    mock_event_receiver.checkpoint.assert_called_once_with(1, "5")
+    mock_event_receiver.checkpoint.assert_called_once_with(Cursor(1, "5"))
 
 
 async def async_generator_to_list(input: AsyncGenerator[Any, None]) -> list[Any]:

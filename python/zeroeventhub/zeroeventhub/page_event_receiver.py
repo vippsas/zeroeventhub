@@ -1,6 +1,6 @@
 """Module to make it easy to receive a page of events"""
 
-from typing import Dict, Any, Sequence, Optional, List
+from typing import Dict, Sequence, List
 from .cursor import Cursor
 from .event import Event
 from .event_receiver import EventReceiver
@@ -15,7 +15,7 @@ class PageEventReceiver(EventReceiver):
         """Initialize the PageEventReceiver with empty state."""
         self._events: List[Event] = []
         self._checkpoints: List[Cursor] = []
-        self._latest_checkpoints: Dict[int, str] = {}
+        self._latest_checkpoints: Dict[int, Cursor] = {}
 
     def clear(self) -> None:
         """Clear the received events and checkpoints, ready to handle a new page."""
@@ -36,27 +36,21 @@ class PageEventReceiver(EventReceiver):
     @property
     def latest_checkpoints(self) -> Sequence[Cursor]:
         """Only return the latest checkpoint for each partition."""
-        return [
-            Cursor(partition_id, cursor)
-            for partition_id, cursor in self._latest_checkpoints.items()
-        ]
+        return list(self._latest_checkpoints.values())
 
-    async def event(self, partition_id: int, headers: Optional[Dict[str, str]], data: Any) -> None:
+    async def event(self, event: Event) -> None:
         """
         Add the given event to the list.
 
-        :param partition_id: the partition id
-        :param headers: the headers
-        :param data: the data
+        :param event: the event
         """
-        self._events.append(Event(partition_id, headers, data))
+        self._events.append(event)
 
-    async def checkpoint(self, partition_id: int, cursor: str) -> None:
+    async def checkpoint(self, checkpoint: Cursor) -> None:
         """
-        Add the given cursor to the list.
+        Add the given checkpoint to the list.
 
-        :param partition_id: the partition id
-        :param cursor: the cursor
+        :param checkpoint: the cursor to use as a checkpoint to continue processing from later
         """
-        self._checkpoints.append(Cursor(partition_id, cursor))
-        self._latest_checkpoints[partition_id] = cursor
+        self._checkpoints.append(checkpoint)
+        self._latest_checkpoints[checkpoint.partition_id] = checkpoint

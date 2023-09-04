@@ -14,14 +14,14 @@ def page_event_receiver():
 
 
 async def receive_page_1_events(page_event_receiver: EventReceiver) -> None:
-    await page_event_receiver.event(1, {"header1": "abc"}, "event 1 partition 1")
-    await page_event_receiver.event(1, {}, "event 2 partition 1")
-    await page_event_receiver.checkpoint(1, "0xf01dab1e")
-    await page_event_receiver.event(2, {"header1": "abc"}, "event 1 partition 2")
-    await page_event_receiver.event(1, {"header1": "def"}, "event 3 partition 1")
-    await page_event_receiver.checkpoint(1, "0xFOO")
-    await page_event_receiver.event(2, {"header1": "blah"}, "event 2 partition 2")
-    await page_event_receiver.checkpoint(2, "0xBA5EBA11")
+    await page_event_receiver.event(Event(1, {"header1": "abc"}, "event 1 partition 1"))
+    await page_event_receiver.event(Event(1, {}, "event 2 partition 1"))
+    await page_event_receiver.checkpoint(Cursor(1, "0xf01dab1e"))
+    await page_event_receiver.event(Event(2, {"header1": "abc"}, "event 1 partition 2"))
+    await page_event_receiver.event(Event(1, {"header1": "def"}, "event 3 partition 1"))
+    await page_event_receiver.checkpoint(Cursor(1, "0xFOO"))
+    await page_event_receiver.event(Event(2, {"header1": "blah"}, "event 2 partition 2"))
+    await page_event_receiver.checkpoint(Cursor(2, "0xBA5EBA11"))
 
 
 async def test_page_contains_all_received_events_and_checkpoints(page_event_receiver):
@@ -81,8 +81,8 @@ async def test_page_contains_all_received_events_and_checkpoints_when_receiving_
 
     # act
     page_event_receiver.clear()
-    await page_event_receiver.event(1, None, "event 4 partition 1")
-    await page_event_receiver.checkpoint(1, "0x5ca1ab1e")
+    await page_event_receiver.event(Event(1, None, "event 4 partition 1"))
+    await page_event_receiver.checkpoint(Cursor(1, "0x5ca1ab1e"))
 
     # assert
     assert page_event_receiver.events == [
