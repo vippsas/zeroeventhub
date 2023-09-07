@@ -14,7 +14,7 @@ class DataReader(Protocol):
 
     def get_data(
         self, cursors: Sequence[Cursor], headers: Optional[Sequence[str]], page_size: Optional[int]
-    ) -> Union[Generator[Dict[str, Any], Any, Any], AsyncGenerator[Dict[str, Any], Any]]:
+    ) -> Union[Generator[Dict[str, Any], None, None], AsyncGenerator[Dict[str, Any], None]]:
         """
         Read a page of events at server side for the given cursors.
 

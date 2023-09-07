@@ -1,6 +1,7 @@
 from typing import Any, Dict, List, Optional, Sequence, Generator, AsyncGenerator, Union
 import json
 import pytest
+import asyncio
 from unittest import mock
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse
@@ -16,13 +17,15 @@ app = FastAPI()
 class FakeAsyncDataReader(DataReader):
     async def get_data(
         self, cursors: Sequence[Cursor], headers: Optional[Sequence[str]], page_size: Optional[int]
-    ) -> Union[Generator[Dict[str, Any], Any, Any], AsyncGenerator[Dict[str, Any], Any]]:
+    ) -> AsyncGenerator[Dict[str, Any], None]:
         header_dict = {}
         if headers:
             for header in headers:
                 header_dict[header] = header
         event_list_p1 = ["e1", "e2", "e3"]
         event_list_p2 = ["e4", "e5", "e6"]
+
+        await asyncio.sleep(0.1)
         for cursor in cursors:
             if cursor.partition_id == 0:
                 for event in event_list_p1:
@@ -47,7 +50,7 @@ class FakeAsyncDataReader(DataReader):
 class FakeDataReader(DataReader):
     def get_data(
         self, cursors: Sequence[Cursor], headers: Optional[Sequence[str]], page_size: Optional[int]
-    ) -> Union[Generator[Dict[str, Any], Any, Any], AsyncGenerator[Dict[str, Any], Any]]:
+    ) -> Generator[Dict[str, Any], None, None]:
         header_dict = {}
         if headers:
             for header in headers:
@@ -157,10 +160,12 @@ async def test_request_handler_cursor0_skipping():
 
 
 def test_no_n_param():
-    client = TestClient(app)
-    response = client.get("/feed/v1?cursor0=c0&cursor1=c1&headers=h1,h2,h3")
-    assert response.status_code == 400
-    assert response.json() == {"detail": "Parameter n not found"}
+    with mock.patch.object(FakeDataReader, "get_data") as mocked_get_data:
+        client = TestClient(app)
+        response = client.get("/feed/v1?cursor0=c0&cursor1=c1&headers=h1,h2,h3")
+        assert response.status_code == 400
+        assert response.json() == {"detail": "Parameter n not found"}
+        mocked_get_data.assert_not_called()
 
 
 def test_invalid_n_param():
@@ -172,9 +177,41 @@ def test_invalid_n_param():
         mocked_get_data.assert_not_called()
 
 
-def test_invalid_cursor_param():
+@pytest.mark.parametrize(
+    ("url",),
+    [
+        ("/feed/v1?n=1&cursor0=0",),
+        ("/feed/v1?n=0",),
+    ],
+)
+def test_mismatched_n_param(url: str) -> None:
+    with mock.patch.object(FakeDataReader, "get_data") as mocked_get_data:
+        client = TestClient(app)
+        response = client.get(url)
+        assert response.status_code == 400
+        assert response.json() == {"detail": "Partition count doesn't match as expected"}
+        mocked_get_data.assert_not_called()
+
+
+def test_invalid_pagesizehint_param() -> None:
+    with mock.patch.object(FakeDataReader, "get_data") as mocked_get_data:
+        client = TestClient(app)
+        response = client.get("/feed/v1?n=2&cursor0=c0&pagesizehint=foobar")
+        assert response.status_code == 400
+        assert response.json() == {"detail": "Invalid parameter pagesizehint"}
+        mocked_get_data.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("url",),
+    [
+        ("/feed/v1?n=2&cursor2=c0&headers=h1,h2,h3",),
+        ("/feed/v1?n=2",),
+    ],
+)
+def test_invalid_cursor_param(url: str) -> None:
     client = TestClient(app)
-    response = client.get("/feed/v1?n=2&cursor2=c0&headers=h1,h2,h3")
+    response = client.get(url)
     assert response.status_code == 400
     assert response.json() == {"detail": "Cursor parameter is missing"}
 

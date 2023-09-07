@@ -1,6 +1,6 @@
 """ Api handlers definition"""
 import json
-from typing import Any, Generator, Dict, Union, AsyncGenerator
+from typing import Any, AsyncGenerator, Dict, Generator, Union
 from fastapi import Request, HTTPException, status
 from fastapi.responses import StreamingResponse
 from .data_reader import DataReader
