@@ -1,18 +1,9 @@
 """Module to make it easy to receive a page of events"""
 
 from typing import Dict, Any, Sequence, Optional, List
-from dataclasses import dataclass
-from .event_receiver import EventReceiver
 from .cursor import Cursor
-
-
-@dataclass
-class Event:
-    """All properties received relating to a certain event."""
-
-    partition_id: int
-    headers: Optional[Dict[str, str]]
-    data: Any
+from .event import Event
+from .event_receiver import EventReceiver
 
 
 class PageEventReceiver(EventReceiver):
@@ -50,7 +41,7 @@ class PageEventReceiver(EventReceiver):
             for partition_id, cursor in self._latest_checkpoints.items()
         ]
 
-    def event(self, partition_id: int, headers: Optional[Dict[str, str]], data: Any) -> None:
+    async def event(self, partition_id: int, headers: Optional[Dict[str, str]], data: Any) -> None:
         """
         Add the given event to the list.
 
@@ -60,7 +51,7 @@ class PageEventReceiver(EventReceiver):
         """
         self._events.append(Event(partition_id, headers, data))
 
-    def checkpoint(self, partition_id: int, cursor: str) -> None:
+    async def checkpoint(self, partition_id: int, cursor: str) -> None:
         """
         Add the given cursor to the list.
 

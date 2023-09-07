@@ -10,8 +10,8 @@ keywords = ["event-streaming"]
 
 [tool.poetry.dependencies]
 python = "^3.9"
-requests = "^2"
 fastapi = "^0.103"
+httpx = "^0.24.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7"
@@ -21,14 +21,9 @@ black = "^22"
 mypy = "1.5.1"
 pytest-mock = "^3"
 poetry-types = "^0.3"
-responses = "^0.22"
 coverage = "^7"
-mock-protocol = "^1"
-httpx = "0.24.1"
-pytest-asyncio = "0.21.1"
-
-[tool.poetry.group.types.dependencies]
-types-requests = "^2"
+respx = "^0.20"
+pytest-asyncio = "^0.21"
 
 [build-system]
 requires = ["poetry-core"]
@@ -48,10 +43,6 @@ warn_unused_configs = true
 explicit_package_bases = true
 
 [[tool.mypy.overrides]]
-module = "mock_protocol.*"
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
 module = "tests.*"
 # `disallow_untyped_defs` has to be explicitly disabled because it is enabled by
 # `strict`, and just setting `check_untyped_defs` does not disable it, even
@@ -66,3 +57,10 @@ accept-no-raise-doc = false
 accept-no-return-doc = true
 accept-no-yields-doc = true
 default-docstring-type = "default"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+omit = ["tests/*"]
+source = ["zeroeventhub/"]

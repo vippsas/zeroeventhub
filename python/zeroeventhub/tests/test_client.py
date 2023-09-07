@@ -1,9 +1,10 @@
 import pytest
-import responses
-import requests
-import mock_protocol
-from unittest import mock
+import pytest_asyncio
+import httpx
+from httpx import AsyncByteStream
+from unittest.mock import AsyncMock, MagicMock
 from json import JSONDecodeError
+from typing import Any, AsyncGenerator, AsyncIterator, Iterable
 
 from zeroeventhub import (
     Client,
@@ -13,28 +14,41 @@ from zeroeventhub import (
     FIRST_CURSOR,
     LAST_CURSOR,
     ALL_HEADERS,
+    receive_events,
 )
+
+
+class IteratorStream(AsyncByteStream):
+    def __init__(self, stream: Iterable[bytes]):
+        self.stream = stream
+
+    async def __aiter__(self) -> AsyncIterator[bytes]:
+        for chunk in self.stream:
+            yield chunk
 
 
 @pytest.fixture
 def mock_event_receiver():
-    return mock_protocol.from_protocol(EventReceiver)
+    receiver_mock = MagicMock(spec=EventReceiver)
+    receiver_mock.event = AsyncMock()
+    receiver_mock.checkpoint = AsyncMock()
+    return receiver_mock
 
 
-@pytest.fixture
-def client():
+@pytest_asyncio.fixture
+async def client():
     url = "https://example.com/feed/v1"
     partition_count = 2
-    return Client(url, partition_count)
+    async with httpx.AsyncClient() as httpx_client:
+        yield Client(url, partition_count, httpx_client)
 
 
 @pytest.mark.parametrize(
-    "page_size_hint,headers",
+    ("page_size_hint", "headers"),
     [(10, ["header1", "header2"]), (0, None), (5, ["header1"]), (0, ["header1"])],
 )
-@responses.activate
-def test_events_fetched_successfully_when_there_are_multiple_lines_in_response(
-    client, mock_event_receiver, page_size_hint, headers
+async def test_events_fetched_successfully_when_there_are_multiple_lines_in_response(
+    client, mock_event_receiver, page_size_hint, headers, respx_mock
 ):
     """
     Test that fetch_events does not raise an error when successfully called.
@@ -43,24 +57,28 @@ def test_events_fetched_successfully_when_there_are_multiple_lines_in_response(
     # arrange
     cursors = [Cursor(1, "cursor1"), Cursor(2, "cursor2")]
 
-    responses.add(
-        responses.GET,
-        client.url,
-        content_type="application/json",
-        body="""{ "partition": 1, "cursor": "5" }
-        { "partition": 1, "headers": {}, "data": "some data"}\n""",
-        status=200,
+    respx_mock.get(client.url).mock(
+        return_value=httpx.Response(
+            status_code=200,
+            headers={"content_type": "application/x-ndjson"},
+            content=IteratorStream(
+                [
+                    b"""{ "partition": 1, "cursor": "5" }\n""",
+                    b"""{ "partition": 1, "headers": {}, "data": "some data"}\n""",
+                ]
+            ),
+        )
     )
 
     # act
-    client.fetch_events(cursors, page_size_hint, mock_event_receiver, headers)
+    await receive_events(mock_event_receiver, client.fetch_events(cursors, page_size_hint, headers))
 
     # assert
     mock_event_receiver.event.assert_called_once_with(1, {}, "some data")
     mock_event_receiver.checkpoint.assert_called_once_with(1, "5")
 
 
-def test_raises_apierror_when_fetch_events_with_missing_cursors(client, mock_event_receiver):
+async def test_raises_apierror_when_fetch_events_with_missing_cursors(client):
     """
     Test that fetch_events raises a ValueError when cursors are missing.
     """
@@ -72,15 +90,14 @@ def test_raises_apierror_when_fetch_events_with_missing_cursors(client, mock_eve
 
     # act & assert
     with pytest.raises(APIError) as excinfo:
-        client.fetch_events(cursors, page_size_hint, mock_event_receiver, headers)
+        await async_generator_to_list(client.fetch_events(cursors, page_size_hint, headers))
 
     # assert
     assert "cursors are missing" in str(excinfo.value)
     assert excinfo.value.status() == 400
 
 
-@responses.activate
-def test_raises_http_error_when_fetch_events_with_unexpected_response(client, mock_event_receiver):
+async def test_raises_http_error_when_fetch_events_with_unexpected_response(client, respx_mock):
     """
     Test that fetch_events raises a HTTPError when the response status
     code is not 2xx
@@ -91,18 +108,71 @@ def test_raises_http_error_when_fetch_events_with_unexpected_response(client, mo
     page_size_hint = 10
     headers = ["header1", "header2"]
 
-    responses.add(responses.GET, client.url, status=404)
+    respx_mock.get(client.url).mock(
+        return_value=httpx.Response(
+            status_code=404,
+        )
+    )
 
     # act & assert that a HTTPError is raised
-    with pytest.raises(requests.HTTPError) as excinfo:
-        client.fetch_events(cursors, page_size_hint, mock_event_receiver, headers)
+    with pytest.raises(httpx.HTTPError) as excinfo:
+        await async_generator_to_list(client.fetch_events(cursors, page_size_hint, headers))
 
     # assert
-    assert str(excinfo.value).startswith(f"404 Client Error: Not Found for url: {client.url}?")
+    assert str(excinfo.value).startswith(f"Client error '404 Not Found' for url '{client.url}?")
 
 
-@responses.activate
-def test_raises_error_when_exception_while_receiving_checkpoint(client, mock_event_receiver):
+async def test_raises_error_when_exception_while_parsing_checkpoint(client, respx_mock):
+    """
+    Test that fetch_events raises a ValueError when the checkpoint returned
+    from the server cannot be parsed.
+    """
+
+    # arrange
+    cursors = [Cursor(1, "cursor1"), Cursor(2, "cursor2")]
+    page_size_hint = 10
+    headers = ["header1", "header2"]
+
+    respx_mock.get(client.url).mock(
+        return_value=httpx.Response(
+            status_code=200,
+            headers={"content_type": "application/x-ndjson"},
+            content="""{ "cursor": "0" }""",  # NOTE: partition is missing
+        )
+    )
+
+    # act & assert
+    with pytest.raises(ValueError, match="error while parsing checkpoint"):
+        await async_generator_to_list(client.fetch_events(cursors, page_size_hint, headers))
+
+
+async def test_raises_error_when_exception_while_parsing_event(client, respx_mock):
+    """
+    Test that fetch_events raises a ValueError when the event returned
+    from the server cannot be parsed.
+    """
+
+    # arrange
+    cursors = [Cursor(1, "cursor1"), Cursor(2, "cursor2")]
+    page_size_hint = 10
+    headers = ["header1", "header2"]
+
+    respx_mock.get(client.url).mock(
+        return_value=httpx.Response(
+            status_code=200,
+            headers={"content_type": "application/x-ndjson"},
+            content="""{ "data": "" }""",  # NOTE: partition is missing
+        )
+    )
+
+    # act & assert
+    with pytest.raises(ValueError, match="error while parsing event"):
+        await async_generator_to_list(client.fetch_events(cursors, page_size_hint, headers))
+
+
+async def test_raises_error_when_exception_while_receiving_checkpoint(
+    client, mock_event_receiver, respx_mock
+):
     """
     Test that fetch_events raises a ValueError when the checkpoint method
     on the event receiver returns an error.
@@ -113,25 +183,26 @@ def test_raises_error_when_exception_while_receiving_checkpoint(client, mock_eve
     page_size_hint = 10
     headers = ["header1", "header2"]
 
-    responses.add(
-        responses.GET,
-        client.url,
-        json={
-            "partition": 0,
-            "cursor": "0",
-        },
-        status=200,
+    respx_mock.get(client.url).mock(
+        return_value=httpx.Response(
+            status_code=200,
+            headers={"content_type": "application/x-ndjson"},
+            content="""{ "partition": 0, "cursor": "0" }""",
+        )
     )
 
     mock_event_receiver.checkpoint.side_effect = Exception("error while receiving checkpoint")
 
     # act & assert
     with pytest.raises(ValueError, match="error while receiving checkpoint"):
-        client.fetch_events(cursors, page_size_hint, mock_event_receiver, headers)
+        await receive_events(
+            mock_event_receiver, client.fetch_events(cursors, page_size_hint, headers)
+        )
 
 
-@responses.activate
-def test_raises_error_when_exception_while_receiving_event(client, mock_event_receiver):
+async def test_raises_error_when_exception_while_receiving_event(
+    client, mock_event_receiver, respx_mock
+):
     """
     Test that fetch_events raises a ValueError when the event method
     on the event receiver returns an error.
@@ -142,25 +213,28 @@ def test_raises_error_when_exception_while_receiving_event(client, mock_event_re
     page_size_hint = 10
     headers = ["header1", "header2"]
 
-    responses.add(
-        responses.GET,
-        client.url,
-        json={"partition": 0, "headers": {}, "data": "some data"},
-        status=200,
+    respx_mock.get(client.url).mock(
+        return_value=httpx.Response(
+            status_code=200,
+            headers={"content_type": "application/x-ndjson"},
+            content="""{"partition": 0, "headers": {}, "data": "some data"}\n""",
+        )
     )
-
-    mock_event_receiver.event.side_effect = Exception("error while receiving event")
+    mock_event_receiver.event.side_effect = Exception("some error while processing the event")
 
     # act & assert
     with pytest.raises(ValueError, match="error while receiving event"):
-        client.fetch_events(cursors, page_size_hint, mock_event_receiver, headers)
+        await receive_events(
+            mock_event_receiver, client.fetch_events(cursors, page_size_hint, headers)
+        )
 
     # assert
     mock_event_receiver.event.assert_called()
 
 
-@responses.activate
-def test_fetch_events_succeeds_when_response_is_empty(client, mock_event_receiver):
+async def test_fetch_events_succeeds_when_response_is_empty(
+    client, mock_event_receiver, respx_mock
+):
     """
     Test that fetch_events gracefully handles an empty response.
     """
@@ -170,24 +244,25 @@ def test_fetch_events_succeeds_when_response_is_empty(client, mock_event_receive
     page_size_hint = 10
     headers = None
 
-    responses.add(
-        responses.GET,
-        client.url,
-        content_type="application/json",
-        body="",
-        status=204,
+    respx_mock.get(client.url).mock(
+        return_value=httpx.Response(
+            status_code=204,
+            headers={"content_type": "application/x-ndjson"},
+            content="",
+        )
     )
 
     # act
-    client.fetch_events(cursors, page_size_hint, mock_event_receiver, headers)
+    await receive_events(mock_event_receiver, client.fetch_events(cursors, page_size_hint, headers))
 
     # assert that the event and checkpoint methods were not called
     mock_event_receiver.event.assert_not_called()
     mock_event_receiver.checkpoint.assert_not_called()
 
 
-@responses.activate
-def test_raises_error_when_response_contains_invalid_json_line(client, mock_event_receiver):
+async def test_raises_error_when_response_contains_invalid_json_line(
+    client, mock_event_receiver, respx_mock
+):
     """
     Test that fetch_events raises a JSONDecodeError when the response contains a non-empty
     line which is not valid JSON.
@@ -198,86 +273,23 @@ def test_raises_error_when_response_contains_invalid_json_line(client, mock_even
     page_size_hint = 10
     headers = ["header1", "header2"]
 
-    responses.add(
-        responses.GET,
-        client.url,
-        body="""{"partition": 1,"cursor": "5"}\ninvalid json""",
-        status=200,
+    respx_mock.get(client.url).mock(
+        return_value=httpx.Response(
+            status_code=200,
+            headers={"content_type": "application/x-ndjson"},
+            content="""{"partition": 1,"cursor": "5"}\ninvalid json""",
+        )
     )
 
     # act & assert
     with pytest.raises(JSONDecodeError):
-        client.fetch_events(cursors, page_size_hint, mock_event_receiver, headers)
+        await receive_events(
+            mock_event_receiver, client.fetch_events(cursors, page_size_hint, headers)
+        )
 
     # assert that the checkpoint method was called for the first response line
     mock_event_receiver.checkpoint.assert_called_once_with(1, "5")
 
 
-@responses.activate
-def test_owned_session_destroyed_when_client_destroyed(mock_event_receiver, mocker):
-    """
-    Test that the client-owned session is closed when the client is destroyed
-    """
-
-    # arrange
-    url = "https://example.com"
-    partition_count = 2
-    session_mock = mocker.MagicMock(spec_set=requests.Session)
-    with mock.patch("zeroeventhub.client.requests.Session") as create_session_mock:
-        create_session_mock.return_value = session_mock
-        client = Client(url, partition_count)
-        create_session_mock.assert_called_once()
-        assert session_mock == client.session
-
-    cursors = [Cursor(1, "cursor1"), Cursor(2, "cursor2")]
-    page_size_hint = 10
-    headers = ["header1", "header2"]
-
-    responses.add(
-        responses.GET,
-        client.url,
-        body="""{"partition": 0,"cursor": 0}\n""",
-        status=200,
-    )
-
-    # act
-    client.fetch_events(cursors, page_size_hint, mock_event_receiver, headers)
-    del client
-
-    # assert
-    session_mock.send.assert_called_once()
-    session_mock.close.assert_called_once()
-
-
-@responses.activate
-def test_provided_session_not_destroyed_when_client_destroyed(mock_event_receiver, mocker):
-    """
-    Test that the provided session is not closed when the client is destroyed
-    """
-
-    # arrange
-    url = "https://example.com"
-    partition_count = 2
-    session_mock = mocker.MagicMock(spec_set=requests.Session)
-    with mock.patch("zeroeventhub.client.requests.Session") as create_session_mock:
-        client = Client(url, partition_count, session_mock)
-        create_session_mock.assert_not_called()
-
-    cursors = [Cursor(1, FIRST_CURSOR), Cursor(2, LAST_CURSOR)]
-    page_size_hint = None
-    headers = ALL_HEADERS
-
-    responses.add(
-        responses.GET,
-        client.url,
-        body="""{"partition": 1,"cursor": "123"}\n""",
-        status=200,
-    )
-
-    # act
-    client.fetch_events(cursors, page_size_hint, mock_event_receiver, headers)
-    del client
-
-    # assert
-    session_mock.send.assert_called_once()
-    session_mock.close.assert_not_called()
+async def async_generator_to_list(input: AsyncGenerator[Any, None]) -> list[Any]:
+    return [item async for item in input]
