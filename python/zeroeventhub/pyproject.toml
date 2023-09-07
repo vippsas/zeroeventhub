@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "zeroeventhub"
-version = "0.1.1"
+version = "0.1.2"
 description = "Broker-less event streaming over HTTP"
 authors = ["Vipps MobilePay"]
 readme = "README.md"
