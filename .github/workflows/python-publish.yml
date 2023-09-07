@@ -30,6 +30,8 @@ jobs:
       - name: Install dependencies
         run: poetry install --sync --only=main
       - name: Build package
-        run: poetry build
+        run: poetry build -vvv
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@f8c70e705ffc13c3b4d1221169b84f12a75d6ca8
+        with:
+          packages-dir: python/zeroeventhub/dist/
