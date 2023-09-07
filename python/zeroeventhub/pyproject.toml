@@ -11,18 +11,21 @@ keywords = ["event-streaming"]
 [tool.poetry.dependencies]
 python = "^3.9"
 requests = "^2"
+fastapi = "^0.103"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7"
 flake8 = "^6"
 pylint = "^2"
 black = "^22"
-mypy = "^0.991"
+mypy = "1.5.1"
 pytest-mock = "^3"
 poetry-types = "^0.3"
 responses = "^0.22"
 coverage = "^7"
 mock-protocol = "^1"
+httpx = "0.24.1"
+pytest-asyncio = "0.21.1"
 
 [tool.poetry.group.types.dependencies]
 types-requests = "^2"

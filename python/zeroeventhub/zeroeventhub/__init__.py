@@ -6,6 +6,8 @@ from .event_receiver import EventReceiver
 from .errors import APIError, ErrCursorsMissing
 from .constants import ALL_HEADERS
 from .page_event_receiver import Event, PageEventReceiver
+from .api_handler import ZeroEventHubFastApiHandler
+from .data_reader import DataReader
 
 
 __all__ = [
@@ -19,4 +21,6 @@ __all__ = [
     "ALL_HEADERS",
     "Event",
     "PageEventReceiver",
+    "ZeroEventHubFastApiHandler",
+    "DataReader",
 ]
