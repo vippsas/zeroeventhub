@@ -171,11 +171,11 @@ async def test_raises_error_when_exception_while_parsing_event(client, respx_moc
         await async_generator_to_list(client.fetch_events(cursors, page_size_hint, headers))
 
 
-async def test_raises_error_when_exception_while_receiving_checkpoint(
+async def test_exceptions_bubble_up_when_exception_while_receiving_checkpoint(
     client, mock_event_receiver, respx_mock
 ):
     """
-    Test that fetch_events raises a ValueError when the checkpoint method
+    Test that receive_events doesn't hide the exception when the checkpoint method
     on the event receiver returns an error.
     """
 
@@ -195,17 +195,17 @@ async def test_raises_error_when_exception_while_receiving_checkpoint(
     mock_event_receiver.checkpoint.side_effect = Exception("error while receiving checkpoint")
 
     # act & assert
-    with pytest.raises(ValueError, match="error while receiving checkpoint"):
+    with pytest.raises(Exception, match="error while receiving checkpoint"):
         await receive_events(
             mock_event_receiver, client.fetch_events(cursors, page_size_hint, headers)
         )
 
 
-async def test_raises_error_when_exception_while_receiving_event(
+async def test_exceptions_bubble_up_when_exception_while_receiving_event(
     client, mock_event_receiver, respx_mock
 ):
     """
-    Test that fetch_events raises a ValueError when the event method
+    Test that receive_events doesn't hide the exception when the event method
     on the event receiver returns an error.
     """
 
@@ -224,7 +224,7 @@ async def test_raises_error_when_exception_while_receiving_event(
     mock_event_receiver.event.side_effect = Exception("some error while processing the event")
 
     # act & assert
-    with pytest.raises(ValueError, match="error while receiving event"):
+    with pytest.raises(Exception, match="some error while processing the event"):
         await receive_events(
             mock_event_receiver, client.fetch_events(cursors, page_size_hint, headers)
         )

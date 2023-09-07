@@ -35,12 +35,6 @@ async def receive_events(
     and the EventReceiver interface."""
     async for event_or_checkpoint in events:
         if isinstance(event_or_checkpoint, Cursor):
-            try:
-                await event_receiver.checkpoint(event_or_checkpoint)
-            except Exception as error:
-                raise ValueError("error while receiving checkpoint") from error
+            await event_receiver.checkpoint(event_or_checkpoint)
         else:
-            try:
-                await event_receiver.event(event_or_checkpoint)
-            except Exception as error:
-                raise ValueError("error while receiving event") from error
+            await event_receiver.event(event_or_checkpoint)
