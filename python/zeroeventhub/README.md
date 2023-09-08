@@ -63,6 +63,53 @@ database. Example of simple single-partition consumption. *Note about the exampl
 
 ```
 
+## Server
+
+This library makes it easy to setup a zeroeventhub feed endpoint with FastAPI.
+
+```python
+>>> from typing import Annotated, Any, AsyncGenerator, Dict, Optional, Sequence
+>>> from fastapi import Depends, FastAPI, Request
+>>> from fastapi.responses import StreamingResponse
+>>> from zeroeventhub import (
+...     Cursor,
+...     DataReader,
+...     ZeroEventHubFastApiHandler,
+... )
+>>> from unittest.mock import Mock
+
+>>> app = FastAPI()
+
+>>> PersonEventRepository = Mock
+
+>>> class PersonDataReader(DataReader):
+...     def __init__(self, person_event_repository: PersonEventRepository) -> None:
+...         self._person_event_repository = person_event_repository
+...
+...     def get_data(
+...         self, cursors: Sequence[Cursor], headers: Optional[Sequence[str]], page_size: Optional[int]
+...     ) -> AsyncGenerator[Dict[str, Any], Any]:
+...         return (
+...             self._person_event_repository.get_events_since(cursors[0].cursor)
+...             .take(page_size)
+...             .with_headers(headers)
+...         )
+
+>>> def get_person_data_reader() -> PersonDataReader:
+...     return PersonDataReader(PersonEventRepository())
+
+>>> PersonDataReaderDependency = Annotated[
+...    PersonDataReader,
+...    Depends(get_person_data_reader, use_cache=True),
+... ]
+
+>>> @app.get("person/feed/v1")
+... async def feed(request: Request, person_data_reader: PersonDataReaderDependency) -> StreamingResponse:
+...     api_handler = ZeroEventHubFastApiHandler(data_reader=person_data_reader, server_partition_count=1)
+...     return api_handler.handle(request)
+
+```
+
 ## Development
 
 To run the test suite, assuming you already have Python 3.10 or later installed and on your `PATH`:
