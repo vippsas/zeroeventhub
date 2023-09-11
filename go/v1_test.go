@@ -439,7 +439,7 @@ const (
 	cursorReturn504 = "returnHttp504"
 )
 
-func MockHandler(logger logrus.FieldLogger, api API) http.Handler {
+func MockHandler(logger logrus.FieldLogger, api EventPublisher) http.Handler {
 	if logger == nil {
 		logger = logrus.StandardLogger()
 	}
