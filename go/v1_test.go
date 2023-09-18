@@ -104,8 +104,7 @@ func TestAPI_V1(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			var client EventFetcher = createZehClientWithPartitionCount(server, test.partitionCount)
 			var page EventPageSingleType[TestEvent]
-			token := fmt.Sprintf("%d", test.partitionCount)
-			err := client.FetchEvents(context.Background(), token, test.partitionID, test.cursor, &page, Options{
+			err := client.FetchEvents(context.Background(), V1Token, test.partitionID, test.cursor, &page, Options{
 				PageSizeHint: test.pageSizeHint,
 			})
 			if err == nil {
@@ -141,7 +140,7 @@ func TestJSON(t *testing.T) {
 	loggingClient.Transport = &loggingRoundTripper
 	client := createZehClient(server).WithHttpClient(loggingClient)
 	var page EventPageSingleType[TestEvent]
-	err := client.FetchEvents(context.Background(), "2", 0, "9998", &page, Options{})
+	err := client.FetchEvents(context.Background(), V1Token, 0, "9998", &page, Options{})
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"ID":"00000000-0000-0000-0000-00000000270f","Version":0,"Cursor":9999}}
 {"cursor":"9999"}
@@ -174,7 +173,7 @@ func TestNewLines(t *testing.T) {
 
 	var page1 EventPageSingleType[TestEvent]
 	client := NewClient(server.URL+"/withNewLineAtTheEnd/feed/v1", 2).WithHttpClient(server.Client())
-	err := client.FetchEvents(context.Background(), "1", 0, "9999", &page1, Options{})
+	err := client.FetchEvents(context.Background(), V1Token, 0, "9999", &page1, Options{})
 	require.NoError(t, err)
 
 	require.Equal(t, []TestEvent{
@@ -190,7 +189,7 @@ func TestNewLines(t *testing.T) {
 
 	var page2 EventPageSingleType[TestEvent]
 	client = NewClient(server.URL+"/withoutNewLineAtTheEnd/feed/v1", 2).WithHttpClient(server.Client())
-	err = client.FetchEvents(context.Background(), "", 0, "9999", &page2, Options{})
+	err = client.FetchEvents(context.Background(), V1Token, 0, "9999", &page2, Options{})
 	require.NoError(t, err)
 	require.Equal(t, page1, page2)
 }
@@ -205,7 +204,7 @@ func TestRequestProcessor(t *testing.T) {
 		return nil
 	})
 	var page EventPageSingleType[TestEvent]
-	err := client.FetchEvents(context.Background(), "", 0, LastCursor, &page, Options{})
+	err := client.FetchEvents(context.Background(), V1Token, 0, LastCursor, &page, Options{})
 	require.NoError(t, err)
 	require.NotNil(t, loggingRoundTripper.requestHeaders)
 	require.Equal(t, "application/json", loggingRoundTripper.requestHeaders.Get("content-type"))
@@ -231,7 +230,7 @@ func MockHandler(logger logrus.FieldLogger, api EventPublisher) http.Handler {
 		}
 
 		query := request.URL.Query()
-		cursors := parseCursors(api.GetPartitionCount(), query)
+		cursors := parseCursors(len(api.GetFeedInfo().Partitions), query)
 		if len(cursors) == 0 {
 			http.Error(writer, ErrCursorsMissing.message, http.StatusBadRequest)
 			return
@@ -266,9 +265,9 @@ func TestMockResponses(t *testing.T) {
 	client := createZehClient(server)
 	var page EventPageSingleType[TestEvent]
 
-	err := client.FetchEvents(context.Background(), "", 0, cursorReturn500, &page, Options{})
+	err := client.FetchEvents(context.Background(), V1Token, 0, cursorReturn500, &page, Options{})
 	require.EqualError(t, err, "unexpected response body: error when fetching events\n")
-	err = client.FetchEvents(context.Background(), "", 0, cursorReturn504, &page, Options{})
+	err = client.FetchEvents(context.Background(), V1Token, 0, cursorReturn504, &page, Options{})
 	require.EqualError(t, err, "empty response body")
 
 	// Checking logged entries

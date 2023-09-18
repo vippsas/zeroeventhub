@@ -1,20 +1,19 @@
 package zeroeventhub
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/sirupsen/logrus"
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 )
 
 // EventPublisher is a generic-based interface that has to be implemented on a server side.
 type EventPublisher interface {
 	// GetName should return the name of the EventPublisher (used in logging).
 	GetName() string
-	// GetPartitionCount should return amount of partitions available at this EventPublisher (used in a handshake).
-	GetPartitionCount() int
+	GetFeedInfo() FeedInfo
 
 	EventFetcher
 }
@@ -24,8 +23,27 @@ type EventPublisher interface {
 // and FetchEventsHandler. The first one is put on an endpoint of your own choosing; the
 // latter should be installed at `/events` relative to the first one.
 type HTTPHandlers struct {
-	EventPublisher    EventPublisher
-	LoggerFromRequest func(*http.Request) logrus.FieldLogger
+	eventPublisher    EventPublisher
+	loggerFromRequest func(*http.Request) logrus.FieldLogger
+
+	feedInfo       FeedInfo
+	partitionsById map[int]Partition
+}
+
+func NewHTTPHandlers(publisher EventPublisher, loggerFromRequest func(*http.Request) logrus.FieldLogger) HTTPHandlers {
+	feedInfo := publisher.GetFeedInfo()
+	partitionsById := make(map[int]Partition)
+	for _, p := range feedInfo.Partitions {
+		partitionsById[p.Id] = p
+	}
+
+	return HTTPHandlers{
+		eventPublisher:    publisher,
+		loggerFromRequest: loggerFromRequest,
+
+		feedInfo:       feedInfo,
+		partitionsById: partitionsById,
+	}
 }
 
 // DiscoveryHandler should be handling GET requests on the main URL of your FeedAPI
@@ -38,72 +56,68 @@ func (h HTTPHandlers) DiscoveryHandler(writer http.ResponseWriter, request *http
 		return
 	}
 
-	writer.WriteHeader(http.StatusNotImplemented)
+	// We are on version 2
+	encodedInfo, err := json.Marshal(h.eventPublisher.GetFeedInfo())
+	if err != nil {
+		writer.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	writer.WriteHeader(http.StatusOK)
+	_, _ = writer.Write(encodedInfo)
 }
 
-func (h HTTPHandlers) ZeroEventHubV1Handler(writer http.ResponseWriter, request *http.Request) {
-	logger := h.LoggerFromRequest(request)
+func (h HTTPHandlers) EventsHandler(writer http.ResponseWriter, request *http.Request) {
+	partitionCount := len(h.eventPublisher.GetFeedInfo().Partitions)
+	logger := h.loggerFromRequest(request)
+
 	query := request.URL.Query()
-	if !query.Has("n") {
-		http.Error(writer, ErrHandshakePartitionCountMissing.Error(), ErrHandshakePartitionCountMissing.Status())
+	if !query.Has("token") || query.Get("token") != h.feedInfo.Token {
+		http.Error(writer, ErrIllegalToken.Error(), ErrIllegalToken.Status())
 		return
 	}
-	if n, err := strconv.Atoi(query.Get("n")); err != nil {
+
+	var partitionId int
+	var err error
+	if partitionId, err = strconv.Atoi(query.Get("partition")); err != nil {
 		http.Error(writer, err.Error(), http.StatusBadRequest)
 		return
-	} else {
-		if n != h.EventPublisher.GetPartitionCount() {
-			http.Error(writer, ErrHandshakePartitionCountMismatch.Error(), ErrHandshakePartitionCountMismatch.Status())
-			return
-		}
+	} else if _, ok := h.partitionsById[partitionId]; !ok {
+		http.Error(writer, ErrPartitionDoesntExist.Error(), ErrPartitionDoesntExist.Status())
+		return
 	}
+
 	pageSizeHint := DefaultPageSize
 	if query.Has("pagesizehint") {
 		if x, err := strconv.Atoi(query.Get("pagesizehint")); err != nil {
-			http.Error(writer, err.Error(), http.StatusBadRequest)
+			http.Error(writer, "pagesizehint not an integer", http.StatusBadRequest)
 			return
 		} else {
 			pageSizeHint = x
 		}
 	}
-	var headers []string
-	if query.Has("headers") {
-		headers = strings.Split(strings.TrimSuffix(query.Get("headers"), ","), ",")
+
+	if !query.Has("cursor") {
+		http.Error(writer, "no cursor argument", http.StatusBadRequest)
 	}
-	cursors := parseCursors(h.EventPublisher.GetPartitionCount(), query)
-	if len(cursors) == 0 {
-		http.Error(writer, ErrCursorsMissing.message, http.StatusBadRequest)
-		return
-	} else if len(cursors) > 1 {
-		// we used to support multiple cursors in the v1 protocol. This feature went unused
-		// and was then deprecated; but that is the reason for the strange signature.
-		http.Error(writer, "support for multiple cursors in the same request has been removed", http.StatusBadRequest)
-		return
-	}
-	partitionID := cursors[0].PartitionID
-	cursor := cursors[0].Cursor
+	cursor := query.Get("cursor")
 
 	fields := logger.
-		WithField("event", h.EventPublisher.GetName()).
-		WithField("PartitionCount", h.EventPublisher.GetPartitionCount()).
-		WithField("partitionID", partitionID).
+		WithField("event", h.eventPublisher.GetName()).
+		WithField("PartitionCount", partitionCount).
+		WithField("partitionID", partitionId).
 		WithField("cursors", cursor).
-		WithField("PageSizeHint", pageSizeHint).
-		WithField("Headers", headers)
+		WithField("PageSizeHint", pageSizeHint)
 	fields.Info()
 	serializer := NewNDJSONEventSerializer(writer)
-	err := h.EventPublisher.FetchEvents(request.Context(), "", partitionID, cursor, serializer, Options{
+	err = h.eventPublisher.FetchEvents(request.Context(), "", partitionId, cursor, serializer, Options{
 		PageSizeHint: pageSizeHint,
 	})
 	if err != nil {
-		logger.WithField("event", h.EventPublisher.GetName()+".fetch_events_error").WithError(err).Info()
+		logger.WithField("publisherName", h.eventPublisher.GetName()).
+			WithField("event", "feedapi.server.fetch_events_error").WithError(err).Info()
 		http.Error(writer, "Internal server error", http.StatusInternalServerError)
 		return
 	}
-}
-
-func (h HTTPHandlers) EventsHandler(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotImplemented)
 }
 
 func parseCursors(partitionCount int, query url.Values) (cursors []Cursor) {

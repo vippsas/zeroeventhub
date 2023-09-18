@@ -18,12 +18,9 @@ func init() {
 }
 
 func Server(publisher EventPublisher) *httptest.Server {
-	handlers := HTTPHandlers{
-		EventPublisher: publisher,
-		LoggerFromRequest: func(*http.Request) logrus.FieldLogger {
-			return logger
-		},
-	}
+	handlers := NewHTTPHandlers(publisher, func(*http.Request) logrus.FieldLogger {
+		return logger
+	})
 
 	routingHandler := func(w http.ResponseWriter, r *http.Request) {
 		// expose the feed on "testfeed"
@@ -66,8 +63,18 @@ func (t TestZeroEventHubAPI) GetName() string {
 	return "TestZeroEventHubAPI"
 }
 
-func (t TestZeroEventHubAPI) GetPartitionCount() int {
-	return 2
+func (t TestZeroEventHubAPI) GetFeedInfo() FeedInfo {
+	return FeedInfo{
+		Token: "the-token",
+		Partitions: []Partition{
+			{
+				Id: 0,
+			},
+			{
+				Id: 1,
+			},
+		},
+	}
 }
 
 func (t TestZeroEventHubAPI) FetchEvents(ctx context.Context, token string, partitionID int, cursor string, receiver EventReceiver, options Options) error {
