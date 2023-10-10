@@ -2,7 +2,7 @@ import pytest
 import pytest_asyncio
 import httpx
 from httpx import AsyncByteStream
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, call
 from json import JSONDecodeError
 from typing import Any, AsyncGenerator, AsyncIterator, Iterable
 
@@ -77,6 +77,56 @@ async def test_events_fetched_successfully_when_there_are_multiple_lines_in_resp
     # assert
     mock_event_receiver.event.assert_called_once_with(Event(1, {}, "some data"))
     mock_event_receiver.checkpoint.assert_called_once_with(Cursor(1, "5"))
+
+
+async def test_events_fetched_successfully_when_there_are_multiple_line_separators_in_response(
+    client, mock_event_receiver, respx_mock
+):
+    """
+    Test that fetch_events does not raise an error when successfully called,
+    and that the event receiver is called with the expected data.
+    """
+
+    # arrange
+    cursors = [Cursor(0, "cursor0")]
+
+    respx_mock.get(client.url).mock(
+        return_value=httpx.Response(
+            status_code=200,
+            headers={"content_type": "application/x-ndjson; charset=utf-8"},
+            content=IteratorStream(
+                [
+                    """{ "partition": 0, "data": "some\\n data containing \x85 line""".encode(
+                        "utf-8"
+                    ),
+                    """ separators"}\n""".encode("utf-8"),
+                    (
+                        """{ "partition": 0, "data": { "more": ["data containing\\r\\n","""
+                        + """ "line separators"], "foo": "bar\x85baz" } }\n"""
+                    ).encode("utf-8"),
+                    """{ "partition": 0, "cursor": "5" }\r""".encode("utf-8"),
+                ]
+            ),
+        )
+    )
+
+    # act
+    await receive_events(mock_event_receiver, client.fetch_events(cursors, None, None))
+
+    # assert
+    mock_event_receiver.event.assert_has_calls(
+        [
+            call(Event(0, None, "some\n data containing \x85 line separators")),
+            call(
+                Event(
+                    0,
+                    None,
+                    {"more": ["data containing\r\n", "line separators"], "foo": "bar\x85baz"},
+                )
+            ),
+        ]
+    )
+    mock_event_receiver.checkpoint.assert_called_once_with(Cursor(0, "5"))
 
 
 async def test_raises_apierror_when_fetch_events_with_missing_cursors(client):

@@ -8,6 +8,7 @@ import httpx
 from .cursor import Cursor
 from .event import Event
 from .errors import ErrCursorsMissing
+from .response_line_iterator import aiter_lines
 
 
 class Client:
@@ -21,7 +22,6 @@ class Client:
         partition_count: int,
         http_client: httpx.AsyncClient,
     ) -> None:
-
         """
         Initializes a new instance of the Client class.
 
@@ -118,7 +118,7 @@ class Client:
         """
         res.raise_for_status()
 
-        async for line in res.aiter_lines():
+        async for line in aiter_lines(res, "\n"):
             yield self._parse_checkpoint_or_event(line)
 
     def _parse_checkpoint_or_event(self, raw_line: str) -> Union[Event, Cursor]:
