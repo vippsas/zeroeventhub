@@ -15,11 +15,11 @@ httpx = "^0.27"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7"
-mypy = "1.5.1"
 pytest-mock = "^3"
 poetry-types = "^0.5"
 coverage = "^7"
 respx = "^0.21"
+pyright = "^1"
 pytest-asyncio = "^0.23"
 ruff = "^0.4"
 
@@ -112,13 +112,46 @@ max-args = 6
     "S",      # flake8-bandit (security checks)
 ]
 
-[tool.mypy]
-files = "zeroeventhub,tests"
-python_version = "3.12"
-strict = true
-warn_unreachable = true
-warn_unused_configs = true
-explicit_package_bases = true
+[tool.pyright]
+pythonVersion = "3.12"
+ignore = ["tests"]
+deprecateTypingAliases = true
+reportMissingTypeStubs = true
+reportPropertyTypeMismatch = true
+strictParameterNoneValue = true
+strictSetInference = true
+strictListInference = true
+strictDictionaryInference = true
+reportImportCycles = true
+reportUnusedClass = true
+reportUnusedVariable = true
+reportDuplicateImport = true
+reportUntypedClassDecorator = true
+reportUntypedBaseClass = true
+reportUntypedNamedTuple = true
+reportPrivateUsage = true
+reportTypeCommentUsage = true
+reportConstantRedefinition = true
+reportDeprecated = "warning"
+reportIncompatibleMethodOverride = true
+reportIncompatibleVariableOverride = "warning"
+reportInconsistentConstructor = true
+reportOverlappingOverload = true
+reportUninitializedInstanceVariable = true
+reportMissingParameterType = true
+reportInvalidTypeVarUse = true
+reportCallInDefaultInitializer = true
+reportUnnecessaryIsInstance = "warning"
+reportUnnecessaryCast = "warning"
+reportUnnecessaryComparison = true
+reportUnnecessaryContains = true
+reportImplicitStringConcatenation = true
+reportInvalidStubStatement = "warning"
+reportIncompleteStub = "warning"
+reportUnusedCoroutine = "warning"
+reportUnnecessaryTypeIgnoreComment = "error"
+reportMatchNotExhaustive = "warning"
+reportShadowedImports = true
 
 [[tool.mypy.overrides]]
 module = "tests.*"

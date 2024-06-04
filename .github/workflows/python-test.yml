@@ -37,7 +37,7 @@ jobs:
         name: Run ruff format
       - run: poetry run ruff check
         name: Run ruff check
-      - run: poetry run mypy
+      - run: poetry run pyright
         name: Check types
       # test
       - run: poetry run coverage run --branch -m pytest
