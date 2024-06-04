@@ -27,3 +27,4 @@ class DataReader(Protocol):
         :param headers: the header keys to be be fullfiled with values
         :param page_size: page size of the return data
         """
+        ...

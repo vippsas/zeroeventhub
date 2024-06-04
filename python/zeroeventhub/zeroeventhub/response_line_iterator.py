@@ -1,13 +1,13 @@
 """httpx response line iterator."""
 
-import typing
+import collections.abc
 
 import httpx
 
 
 async def aiter_lines(
     response: httpx.Response, newline_chars: str | None = None
-) -> typing.AsyncIterator[str]:
+) -> collections.abc.AsyncIterator[str]:
     """Iterate through the lines in the response, respecting the given newline characters."""
     decoder = LineDecoder(newline_chars)
     async for text in response.aiter_text():
@@ -17,7 +17,7 @@ async def aiter_lines(
         yield line
 
 
-def splitlines(text: str, newline_chars: str) -> typing.Iterator[str]:
+def splitlines(text: str, newline_chars: str) -> collections.abc.Iterator[str]:
     """Split lines keeping the endings, then stitch them back together
     if the end isn't in the given list of newline characters.
     """
