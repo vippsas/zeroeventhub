@@ -1,4 +1,4 @@
-"""Module containing constants which are relevant for both Client and Server"""
+"""Module containing constants which are relevant for both Client and Server."""
 
 ALL_HEADERS = ("_all",)
 """

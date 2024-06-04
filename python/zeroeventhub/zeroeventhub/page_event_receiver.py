@@ -1,21 +1,20 @@
-"""Module to make it easy to receive a page of events"""
+"""Module to make it easy to receive a page of events."""
 
-from typing import Dict, Sequence, List
+from collections.abc import Sequence
+
 from .cursor import Cursor
 from .event import Event
 from .event_receiver import EventReceiver
 
 
 class PageEventReceiver(EventReceiver):
-    """
-    Receive a page of events
-    """
+    """Receive a page of events."""
 
     def __init__(self) -> None:
         """Initialize the PageEventReceiver with empty state."""
-        self._events: List[Event] = []
-        self._checkpoints: List[Cursor] = []
-        self._latest_checkpoints: Dict[int, Cursor] = {}
+        self._events: list[Event] = []
+        self._checkpoints: list[Cursor] = []
+        self._latest_checkpoints: dict[int, Cursor] = {}
 
     def clear(self) -> None:
         """Clear the received events and checkpoints, ready to handle a new page."""

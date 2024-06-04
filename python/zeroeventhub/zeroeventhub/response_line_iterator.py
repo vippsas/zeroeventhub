@@ -1,10 +1,12 @@
 """httpx response line iterator."""
+
 import typing
+
 import httpx
 
 
 async def aiter_lines(
-    response: httpx.Response, newline_chars: typing.Optional[str] = None
+    response: httpx.Response, newline_chars: str | None = None
 ) -> typing.AsyncIterator[str]:
     """Iterate through the lines in the response, respecting the given newline characters."""
     decoder = LineDecoder(newline_chars)
@@ -16,8 +18,9 @@ async def aiter_lines(
 
 
 def splitlines(text: str, newline_chars: str) -> typing.Iterator[str]:
-    """split lines keeping the endings, then stitch them back together
-    if the end isn't in the given list of newline characters."""
+    """Split lines keeping the endings, then stitch them back together
+    if the end isn't in the given list of newline characters.
+    """
     lines = text.splitlines(keepends=True)
     buffer = ""
     yielded = False
@@ -67,14 +70,14 @@ class LineDecoder:
     and allows restricting which characters are considered newline characters.
     """
 
-    def __init__(self, newline_chars: typing.Optional[str] = None) -> None:
+    def __init__(self, newline_chars: str | None = None) -> None:
         """Initialize the line decoder with the given set of characters which denote newlines."""
-        self.buffer: typing.List[str] = []
+        self.buffer: list[str] = []
         self.trailing_cr: bool = False
         # See https://docs.python.org/3/library/stdtypes.html#str.splitlines
         self.newline_chars = newline_chars or "\n\r\x0b\x0c\x1c\x1d\x1e\x85\u2028\u2029"
 
-    def decode(self, text: str) -> typing.List[str]:
+    def decode(self, text: str) -> list[str]:
         """Decode the given text into a series of lines."""
         # We always push a trailing `\r` into the next decode iteration.
         if self.trailing_cr:
@@ -108,7 +111,7 @@ class LineDecoder:
 
         return lines
 
-    def flush(self) -> typing.List[str]:
+    def flush(self) -> list[str]:
         """Flush the line buffer."""
         if not self.buffer and not self.trailing_cr:
             return []

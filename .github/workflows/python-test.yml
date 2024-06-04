@@ -25,7 +25,7 @@ jobs:
       - uses: actions/setup-python@v4
         name: Install Python
         with:
-          python-version: '3.11.9'
+          python-version: '3.12.3'
       - name: Install and configure Poetry
         run: |
           pip install poetry==1.8.3
@@ -33,12 +33,10 @@ jobs:
       - run: poetry install --sync
         name: Install dependencies
       # lint
-      - run: poetry run black --check --diff tests/ zeroeventhub/
-        name: Run black
-      - run: poetry run flake8
-        name: Run flake8
-      - run: poetry run pylint zeroeventhub/
-        name: Run pylint
+      - run: poetry run ruff format
+        name: Run ruff format
+      - run: poetry run ruff check
+        name: Run ruff check
       - run: poetry run mypy
         name: Check types
       # test

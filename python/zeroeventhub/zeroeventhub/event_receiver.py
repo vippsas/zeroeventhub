@@ -1,7 +1,8 @@
-"""Module to define the EventReceiver interface"""
+"""Module to define the EventReceiver interface."""
 
-from typing import Protocol, Union
 from collections.abc import AsyncGenerator
+from typing import Protocol
+
 from .cursor import Cursor
 from .event import Event
 
@@ -29,10 +30,11 @@ class EventReceiver(Protocol):
 
 
 async def receive_events(
-    event_receiver: EventReceiver, events: AsyncGenerator[Union[Cursor, Event], None]
+    event_receiver: EventReceiver, events: AsyncGenerator[Cursor | Event, None]
 ) -> None:
-    """bridge between the output from the Client fetch_events return value
-    and the EventReceiver interface."""
+    """Bridge between the output from the Client fetch_events return value
+    and the EventReceiver interface.
+    """
     async for event_or_checkpoint in events:
         if isinstance(event_or_checkpoint, Cursor):
             await event_receiver.checkpoint(event_or_checkpoint)

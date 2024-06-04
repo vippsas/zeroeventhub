@@ -1,4 +1,4 @@
-"""This module defines a Cursor dataclass for use by the client and server"""
+"""This module defines a Cursor dataclass for use by the client and server."""
 
 from dataclasses import dataclass
 

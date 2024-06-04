@@ -1,14 +1,13 @@
 import pytest
-
 from zeroeventhub import (
     Cursor,
+    Event,
     EventReceiver,
     PageEventReceiver,
-    Event,
 )
 
 
-@pytest.fixture
+@pytest.fixture()
 def page_event_receiver():
     return PageEventReceiver()
 
@@ -24,11 +23,10 @@ async def receive_page_1_events(page_event_receiver: EventReceiver) -> None:
     await page_event_receiver.checkpoint(Cursor(2, "0xBA5EBA11"))
 
 
-async def test_page_contains_all_received_events_and_checkpoints(page_event_receiver):
-    """
-    Test that the page contains all received events and checkpoints in order.
-    """
-
+async def test_page_contains_all_received_events_and_checkpoints(
+    page_event_receiver,
+) -> None:
+    """Test that the page contains all received events and checkpoints in order."""
     # act
     await receive_page_1_events(page_event_receiver)
 
@@ -53,10 +51,8 @@ async def test_page_contains_all_received_events_and_checkpoints(page_event_rece
     ]
 
 
-async def test_page_is_empty_after_clearing(page_event_receiver):
-    """
-    Test that the page contains no events or checkpoints after being cleared.
-    """
+async def test_page_is_empty_after_clearing(page_event_receiver) -> None:
+    """Test that the page contains no events or checkpoints after being cleared."""
     # arrange
     await receive_page_1_events(page_event_receiver)
 
@@ -71,7 +67,7 @@ async def test_page_is_empty_after_clearing(page_event_receiver):
 
 async def test_page_contains_all_received_events_and_checkpoints_when_receiving_after_being_cleared(
     page_event_receiver,
-):
+) -> None:
     """
     Test that the page contains all received events and checkpoints in order
     from the second page only after the first page was cleared.

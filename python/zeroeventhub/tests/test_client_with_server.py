@@ -1,34 +1,32 @@
+from collections.abc import AsyncGenerator, Sequence
+from typing import Any
+
+import httpx
 import pytest
 import pytest_asyncio
-import httpx
-from httpx import AsyncByteStream
-from unittest.mock import AsyncMock, MagicMock
-from pytest_mock import MockerFixture
-from json import JSONDecodeError
-from typing import Any, AsyncGenerator, Dict, Optional, Sequence, Union
-
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse
-
-
+from pytest_mock import MockerFixture
 from zeroeventhub import (
+    ALL_HEADERS,
+    FIRST_CURSOR,
     Client,
     Cursor,
-    Event,
-    FIRST_CURSOR,
-    ALL_HEADERS,
     DataReader,
+    Event,
     ZeroEventHubFastApiHandler,
 )
-
 
 app = FastAPI()
 
 
 class FakeDataReader(DataReader):
     async def get_data(
-        self, cursors: Sequence[Cursor], headers: Optional[Sequence[str]], page_size: Optional[int]
-    ) -> AsyncGenerator[Dict[str, Any], Any]:
+        self,
+        cursors: Sequence[Cursor],
+        headers: Sequence[str] | None,
+        page_size: int | None,
+    ) -> AsyncGenerator[dict[str, Any], Any]:
         yield {"this method will be replaced": "by mocks"}
 
 
@@ -49,7 +47,7 @@ async def client():
 
 @pytest.mark.parametrize(
     "feed",
-    (
+    [
         [
             Event(
                 0,
@@ -81,7 +79,7 @@ async def client():
             ),
             Cursor(0, "1002"),
         ],
-    ),
+    ],
 )
 @pytest.mark.parametrize(
     ("page_size_hint", "headers"),
@@ -95,28 +93,29 @@ async def client():
 )
 async def test_client_can_successfully_fetch_events_from_server(
     client: Client,
-    feed: Sequence[Union[Event, Cursor]],
+    feed: Sequence[Event | Cursor],
     mocker: MockerFixture,
-    page_size_hint: Optional[int],
-    headers: Optional[Sequence[str]],
+    page_size_hint: int | None,
+    headers: Sequence[str] | None,
 ) -> None:
-    """
-    Test that fetch_events retrieves all the events and cursors the server responds with.
-    """
-
+    """Test that fetch_events retrieves all the events and cursors the server responds with."""
     # arrange
     cursors = [Cursor(0, FIRST_CURSOR)]
 
     async def yield_data(
         _cursors: Sequence[Cursor],
-        _headers: Optional[Dict[str, Any]],
-        _page_size_hint: Optional[int],
-    ) -> AsyncGenerator[Dict[str, Any], None]:
+        _headers: dict[str, Any] | None,
+        _page_size_hint: int | None,
+    ) -> AsyncGenerator[dict[str, Any], None]:
         for item in feed:
             if isinstance(item, Cursor):
                 yield {"partition": item.partition_id, "cursor": item.cursor}
             elif isinstance(item, Event):
-                yield {"partition": item.partition_id, "headers": item.headers, "data": item.data}
+                yield {
+                    "partition": item.partition_id,
+                    "headers": item.headers,
+                    "data": item.data,
+                }
 
     get_data_mock = mocker.patch.object(FakeDataReader, "get_data")
     get_data_mock.side_effect = yield_data

@@ -1,20 +1,19 @@
-"""Module containing client-side related code for ZeroEventHub"""
+"""Module containing client-side related code for ZeroEventHub."""
 
 import json
-from typing import Dict, Any, Optional, Sequence, Union
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Sequence
+from typing import Any
+
 import httpx
 
 from .cursor import Cursor
-from .event import Event
 from .errors import ErrCursorsMissing
+from .event import Event
 from .response_line_iterator import aiter_lines
 
 
 class Client:
-    """
-    Client-side code to query a ZeroEventHub server to fetch events.
-    """
+    """Client-side code to query a ZeroEventHub server to fetch events."""
 
     def __init__(
         self,
@@ -44,9 +43,9 @@ class Client:
     async def fetch_events(
         self,
         cursors: Sequence[Cursor],
-        page_size_hint: Optional[int] = None,
-        headers: Optional[Sequence[str]] = None,
-    ) -> AsyncGenerator[Union[Event, Cursor], None]:
+        page_size_hint: int | None = None,
+        headers: Sequence[str] | None = None,
+    ) -> AsyncGenerator[Event | Cursor, None]:
         """
         Fetch events from the server using the provided cursors, page size hint and
         desired headers.
@@ -80,9 +79,9 @@ class Client:
     def _build_request_params(
         self,
         cursors: Sequence[Cursor],
-        page_size_hint: Optional[int],
-        headers: Optional[Sequence[str]],
-    ) -> Dict[str, Union[str, int]]:
+        page_size_hint: int | None,
+        headers: Sequence[str] | None,
+    ) -> dict[str, str | int]:
         """
         Build the http request using the provided inputs.
 
@@ -91,7 +90,7 @@ class Client:
         :param headers: An optional sequence containing event headers desired in the response.
         :return: the http request
         """
-        params: Dict[str, Union[str, int]] = {
+        params: dict[str, str | int] = {
             "n": self.partition_count,
         }
         if page_size_hint:
@@ -105,9 +104,7 @@ class Client:
 
         return params
 
-    async def _process_response(
-        self, res: httpx.Response
-    ) -> AsyncGenerator[Union[Event, Cursor], None]:
+    async def _process_response(self, res: httpx.Response) -> AsyncGenerator[Event | Cursor, None]:
         """
         Process the response from the server.
 
@@ -123,30 +120,31 @@ class Client:
                 continue
             yield self._parse_checkpoint_or_event(line)
 
-    def _parse_checkpoint_or_event(self, raw_line: str) -> Union[Event, Cursor]:
+    def _parse_checkpoint_or_event(self, raw_line: str) -> Event | Cursor:
         """
         Parse a line of response from the server.
 
         :param raw_line: The raw JSON line from the server
         :raises ValueError: if an error occurred parsing the json line into an event or checkpoint.
         """
+        checkpoint_or_event: dict[str, Any] = json.loads(raw_line)
 
-        checkpoint_or_event: Dict[str, Any] = json.loads(raw_line)
-
-        if (cursor := checkpoint_or_event.get("cursor", None)) is not None:
+        if (cursor := checkpoint_or_event.get("cursor")) is not None:
             try:
                 return Cursor(
                     partition_id=checkpoint_or_event["partition"],
                     cursor=cursor,
                 )
             except Exception as error:
-                raise ValueError("error while parsing checkpoint") from error
+                msg = "error while parsing checkpoint"
+                raise ValueError(msg) from error
         else:
             try:
                 return Event(
                     partition_id=checkpoint_or_event["partition"],
-                    headers=checkpoint_or_event.get("headers", None),
+                    headers=checkpoint_or_event.get("headers"),
                     data=checkpoint_or_event["data"],
                 )
             except Exception as error:
-                raise ValueError("error while parsing event") from error
+                msg = "error while parsing event"
+                raise ValueError(msg) from error
