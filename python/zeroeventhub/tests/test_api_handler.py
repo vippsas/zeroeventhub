@@ -1,14 +1,17 @@
-from typing import Any, Dict, List, Optional, Sequence, Generator, AsyncGenerator, Union
-import json
-import pytest
 import asyncio
+import json
+from collections.abc import AsyncGenerator, Generator, Sequence
+from http import HTTPStatus
+from typing import Any
 from unittest import mock
+
+import pytest
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse
-from httpx import AsyncClient
 from fastapi.testclient import TestClient
-from zeroeventhub.cursor import Cursor
+from httpx import AsyncClient
 from zeroeventhub.api_handler import ZeroEventHubFastApiHandler
+from zeroeventhub.cursor import Cursor
 from zeroeventhub.data_reader import DataReader
 
 app = FastAPI()
@@ -16,8 +19,11 @@ app = FastAPI()
 
 class FakeAsyncDataReader(DataReader):
     async def get_data(
-        self, cursors: Sequence[Cursor], headers: Optional[Sequence[str]], page_size: Optional[int]
-    ) -> AsyncGenerator[Dict[str, Any], None]:
+        self,
+        cursors: Sequence[Cursor],
+        headers: Sequence[str] | None,
+        page_size: int | None,
+    ) -> AsyncGenerator[dict[str, Any], None]:
         header_dict = {}
         if headers:
             for header in headers:
@@ -49,8 +55,11 @@ class FakeAsyncDataReader(DataReader):
 
 class FakeDataReader(DataReader):
     def get_data(
-        self, cursors: Sequence[Cursor], headers: Optional[Sequence[str]], page_size: Optional[int]
-    ) -> Generator[Dict[str, Any], None, None]:
+        self,
+        cursors: Sequence[Cursor],
+        headers: Sequence[str] | None,
+        page_size: int | None,
+    ) -> Generator[dict[str, Any], None, None]:
         header_dict = {}
         if headers:
             for header in headers:
@@ -92,11 +101,11 @@ async def validate_async_endpoint(request: Request) -> StreamingResponse:
     return api_handler.handle(request)
 
 
-@pytest.mark.asyncio
-async def test_request_handler_single_cursor():
+@pytest.mark.asyncio()
+async def test_request_handler_single_cursor() -> None:
     async with AsyncClient(app=app, base_url="http://test") as client:
         response = await client.get("/feed/v1?n=2&cursor0=c1")
-        assert response.status_code == 200
+        assert response.status_code == HTTPStatus.OK
         parsed_data = [json.loads(line) async for line in response.aiter_lines()]
 
     assert parsed_data == [
@@ -107,11 +116,11 @@ async def test_request_handler_single_cursor():
     ]
 
 
-@pytest.mark.asyncio
-async def test_request_handler_double_cursors():
+@pytest.mark.asyncio()
+async def test_request_handler_double_cursors() -> None:
     async with AsyncClient(app=app, base_url="http://test") as client:
         response = await client.get("/feed/v1?n=2&cursor0=c0&cursor1=c1")
-        assert response.status_code == 200
+        assert response.status_code == HTTPStatus.OK
         parsed_data = [json.loads(line) async for line in response.aiter_lines()]
     assert parsed_data == [
         {"partition": 0, "headers": {}, "data": "e1"},
@@ -125,13 +134,13 @@ async def test_request_handler_double_cursors():
     ]
 
 
-@pytest.mark.asyncio
-async def test_request_handler_full_parameter_set():
+@pytest.mark.asyncio()
+async def test_request_handler_full_parameter_set() -> None:
     async with AsyncClient(app=app, base_url="http://test") as client:
         response = await client.get(
             "/feed/v1?n=2&cursor0=c0&cursor1=c1&headers=h1,h2,h3&pagesizehint=10"
         )
-        assert response.status_code == 200
+        assert response.status_code == HTTPStatus.OK
         parsed_data = [json.loads(line) async for line in response.aiter_lines()]
     assert parsed_data == [
         {"partition": 0, "headers": {"h1": "h1", "h2": "h2", "h3": "h3"}, "data": "e1"},
@@ -145,11 +154,11 @@ async def test_request_handler_full_parameter_set():
     ]
 
 
-@pytest.mark.asyncio
-async def test_request_handler_cursor0_skipping():
+@pytest.mark.asyncio()
+async def test_request_handler_cursor0_skipping() -> None:
     async with AsyncClient(app=app, base_url="http://test") as client:
         response = await client.get("/feed/v1?n=2&cursor1=c1")
-        assert response.status_code == 200
+        assert response.status_code == HTTPStatus.OK
         parsed_data = [json.loads(line) async for line in response.aiter_lines()]
     assert parsed_data == [
         {"partition": 1, "headers": {}, "data": "e4"},
@@ -159,36 +168,36 @@ async def test_request_handler_cursor0_skipping():
     ]
 
 
-def test_no_n_param():
+def test_no_n_param() -> None:
     with mock.patch.object(FakeDataReader, "get_data") as mocked_get_data:
         client = TestClient(app)
         response = client.get("/feed/v1?cursor0=c0&cursor1=c1&headers=h1,h2,h3")
-        assert response.status_code == 400
+        assert response.status_code == HTTPStatus.BAD_REQUEST
         assert response.json() == {"detail": "Parameter n not found"}
         mocked_get_data.assert_not_called()
 
 
-def test_invalid_n_param():
+def test_invalid_n_param() -> None:
     with mock.patch.object(FakeDataReader, "get_data") as mocked_get_data:
         client = TestClient(app)
         response = client.get("/feed/v1?n=a&cursor0=c0&cursor1=c1&headers=h1,h2,h3")
-        assert response.status_code == 400
+        assert response.status_code == HTTPStatus.BAD_REQUEST
         assert response.json() == {"detail": "Invalid parameter n"}
         mocked_get_data.assert_not_called()
 
 
 @pytest.mark.parametrize(
-    ("url",),
+    "url",
     [
-        ("/feed/v1?n=1&cursor0=0",),
-        ("/feed/v1?n=0",),
+        "/feed/v1?n=1&cursor0=0",
+        "/feed/v1?n=0",
     ],
 )
 def test_mismatched_n_param(url: str) -> None:
     with mock.patch.object(FakeDataReader, "get_data") as mocked_get_data:
         client = TestClient(app)
         response = client.get(url)
-        assert response.status_code == 400
+        assert response.status_code == HTTPStatus.BAD_REQUEST
         assert response.json() == {"detail": "Partition count doesn't match as expected"}
         mocked_get_data.assert_not_called()
 
@@ -197,30 +206,30 @@ def test_invalid_pagesizehint_param() -> None:
     with mock.patch.object(FakeDataReader, "get_data") as mocked_get_data:
         client = TestClient(app)
         response = client.get("/feed/v1?n=2&cursor0=c0&pagesizehint=foobar")
-        assert response.status_code == 400
+        assert response.status_code == HTTPStatus.BAD_REQUEST
         assert response.json() == {"detail": "Invalid parameter pagesizehint"}
         mocked_get_data.assert_not_called()
 
 
 @pytest.mark.parametrize(
-    ("url",),
+    "url",
     [
-        ("/feed/v1?n=2&cursor2=c0&headers=h1,h2,h3",),
-        ("/feed/v1?n=2",),
+        "/feed/v1?n=2&cursor2=c0&headers=h1,h2,h3",
+        "/feed/v1?n=2",
     ],
 )
 def test_invalid_cursor_param(url: str) -> None:
     client = TestClient(app)
     response = client.get(url)
-    assert response.status_code == 400
+    assert response.status_code == HTTPStatus.BAD_REQUEST
     assert response.json() == {"detail": "Cursor parameter is missing"}
 
 
-@pytest.mark.asyncio
-async def test_work_with_async_endpoint():
+@pytest.mark.asyncio()
+async def test_work_with_async_endpoint() -> None:
     async with AsyncClient(app=app, base_url="http://test") as client:
         response = await client.get("/feed/v2?n=2&cursor0=c1")
-        assert response.status_code == 200
+        assert response.status_code == HTTPStatus.OK
         parsed_data = [json.loads(line) async for line in response.aiter_lines()]
 
     assert parsed_data == [

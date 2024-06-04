@@ -15,7 +15,7 @@ class APIError(ValueError):
     HTTP status code that can be used to indicate the type of error that occurred.
     """
 
-    def __init__(self, message: str, code: int):
+    def __init__(self, message: str, code: int) -> None:
         self.message = message
         self.code = code
 
@@ -23,7 +23,7 @@ class APIError(ValueError):
         return self.message
 
     def status(self) -> int:
-        """Return the HTTP status code associated with this APIError"""
+        """Return the HTTP status code associated with this APIError."""
         return self.code
 
 

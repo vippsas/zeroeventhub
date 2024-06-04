@@ -1,6 +1,8 @@
-"""Module to define the DataReader interface"""
+"""Module to define the DataReader interface."""
 
-from typing import Protocol, Sequence, Any, Optional, Generator, Dict, AsyncGenerator, Union
+from collections.abc import AsyncGenerator, Generator, Sequence
+from typing import Any, Protocol
+
 from .cursor import Cursor
 
 # pylint: disable=R0903
@@ -9,12 +11,15 @@ from .cursor import Cursor
 class DataReader(Protocol):
     """
     DataReader is an interface describing an abstraction for reading data for ZeroEventHub response
-    and generate header values based on the list of header keys requested from client
+    and generate header values based on the list of header keys requested from client.
     """
 
     def get_data(
-        self, cursors: Sequence[Cursor], headers: Optional[Sequence[str]], page_size: Optional[int]
-    ) -> Union[Generator[Dict[str, Any], None, None], AsyncGenerator[Dict[str, Any], None]]:
+        self,
+        cursors: Sequence[Cursor],
+        headers: Sequence[str] | None,
+        page_size: int | None,
+    ) -> Generator[dict[str, Any], None, None] | AsyncGenerator[dict[str, Any], None]:
         """
         Read a page of events at server side for the given cursors.
 

@@ -1,28 +1,32 @@
-""" Api handlers definition"""
+"""Api handlers definition."""
+
 import json
-from typing import Any, AsyncGenerator, Dict, Generator, Union
-from fastapi import Request, HTTPException, status
+from collections.abc import AsyncGenerator, Generator
+from typing import Any
+
+from fastapi import HTTPException, Request, status
 from fastapi.responses import StreamingResponse
-from .data_reader import DataReader
+
 from .cursor import Cursor
+from .data_reader import DataReader
 
 
 class ZeroEventHubFastApiHandler:
-    """Handler for ZeroEventHub from server side using fastapi"""
+    """Handler for ZeroEventHub from server side using fastapi."""
 
     def __init__(
         self,
         data_reader: DataReader,
         server_partition_count: int,
-    ):
-        """Initialize the ZeroEventHubFastApiHandler with DataReader"""
+    ) -> None:
+        """Initialize the ZeroEventHubFastApiHandler with DataReader."""
         self.data_reader = data_reader
         self.server_partition_count = server_partition_count
 
     def validate(self, request: Request) -> Any:
         """Validate all required parameters and its format.
-        Return the expected parameter structure for next step processing"""
-
+        Return the expected parameter structure for next step processing.
+        """
         query_params = request.query_params
         n_param = query_params.get("n")
         if n_param is None:
@@ -48,7 +52,8 @@ class ZeroEventHubFastApiHandler:
                 cursor_arr.append(Cursor(i, cursor_param_value))
         if not cursor_arr:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Cursor parameter is missing"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cursor parameter is missing",
             )
 
         page_size_hint_param = query_params.get("pagesizehint")
@@ -58,7 +63,8 @@ class ZeroEventHubFastApiHandler:
                 page_size_hint = int(page_size_hint_param)
             except ValueError as err:
                 raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid parameter pagesizehint"
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid parameter pagesizehint",
                 ) from err
 
         headers_param = query_params.get("headers")
@@ -66,24 +72,29 @@ class ZeroEventHubFastApiHandler:
         if headers_param:
             headers = headers_param.rstrip(",").split(",")
 
-        return {"cursors": cursor_arr, "headers": headers, "pagesizehint": page_size_hint}
+        return {
+            "cursors": cursor_arr,
+            "headers": headers,
+            "pagesizehint": page_size_hint,
+        }
 
     async def generate_response_format(
         self,
-        data_gen: Union[Generator[Dict[str, Any], Any, Any], AsyncGenerator[Dict[str, Any], Any]],
+        data_gen: Generator[dict[str, Any], Any, Any] | AsyncGenerator[dict[str, Any], Any],
     ) -> AsyncGenerator[bytes, Any]:
-        """Generate the response format for the client"""
+        """Generate the response format for the client."""
         # pylint: disable=C0209
         if isinstance(data_gen, AsyncGenerator):
             async for data in data_gen:
-                yield "{}\n".format(json.dumps(data)).encode("utf-8")
+                yield f"{json.dumps(data)}\n".encode()
         else:
             for data in data_gen:
-                yield "{}\n".format(json.dumps(data)).encode("utf-8")
+                yield f"{json.dumps(data)}\n".encode()
 
     def handle(self, request: Request) -> StreamingResponse:
         """Handle the request after validation.
-        Return final response to the client"""
+        Return final response to the client.
+        """
         validated_data = self.validate(request)
         cursors_arr = validated_data["cursors"]
         headers = validated_data["headers"]

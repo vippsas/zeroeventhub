@@ -15,24 +15,102 @@ httpx = "^0.27"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7"
-flake8 = "^6"
-pylint = "^2"
-black = "^22"
 mypy = "1.5.1"
 pytest-mock = "^3"
 poetry-types = "^0.5"
 coverage = "^7"
 respx = "^0.21"
 pytest-asyncio = "^0.23"
+ruff = "^0.4"
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
-[tool.black]
+[tool.ruff]
+target-version = "py312"
+src = ["zeroeventhub", "tests"]
+lint.select = [
+    "F",     # Pyflakes
+    "E",     # Pycodestyle errors
+    "W",     # Pycodestyle warnings
+    "C90",   # McCabe complexity
+    "I",     # import sorting
+    "N",     # PEP8 naming
+    "D",     # pydocstyle
+    "UP",    # pyupgrade
+    "ANN",   # flake8-annotations
+    "ASYNC", # flake8-async
+    "S",     # flake8-bandit
+    "BLE",   # flake8-blind-except
+    "FBT",   # flake8-boolean-trap
+    "B",     # flake8-bugbear
+    "A",     # flake8-builtins
+    "COM",   # flake8-commas
+    "C4",    # flake8-comprehensions
+    "DTZ",   # flake8-datetimez
+    "T10",   # flake8-debugger
+    "EM",    # flake8-errmsg
+    "FA",    # flake8-future-annotations
+    "ISC",   # flake8-implicit-str-concat
+    "ICN",   # flake8-import-conventions
+    "LOG",   # flake8-logging
+    "G",     # flake8-logging-format
+    "INP",   # flake8-no-pep420
+    "PIE",   # flake8-pie
+    "T20",   # flake8-print
+    "PT",    # flake8-pytest-style
+    "Q",     # flake8-quotes
+    "RSE",   # flake8-raise
+    "RET",   # flake8-return
+    "SLF",   # flake8-self
+    "SLOT",  # flake8-slots
+    "SIM",   # flake8-simplify
+    "TID",   # flake8-tidy-imports
+    "TCH",   # flake8-type-checking
+    "ARG",   # flake8-unused-arguments
+    "PTH",   # flake8-use-pathlib
+    "TD",    # flake8-todos
+    "FIX",   # flake8-fixme
+    "ERA",   # eradicate
+    "PL",    # pylint
+    "TRY",   # tryceratops
+    "FLY",   # flynt
+    "NPY",   # numpy-specific rules
+    "PERF",  # perflint
+    "RUF",   # ruff-specific rules
+]
 line-length = 100
-target-version = ['py311']
-SRC = ["zeroeventhub", "tests"]
+lint.ignore = [
+    "ISC001", # implicitly concatenated string literals on one line
+    "ISC003", # enforce implicit string concatenation
+    "RUF003", # disallow ambiguous unicode in comments
+    "D205",   # enforce blank line after comment summary
+    "D212",   # multi-line docstring summary starts on first line
+    "D105",   # docstring on magic methods
+    "D107",   # docstring on __init__
+    "E501",   # line too long
+    "ANN101", # type annotation for self in method
+    "ANN102", # type annotation for cls in classmethod
+    "ANN401", # disallow typing.Any
+    "A003",   # class attribute "shadowing" builtin
+    "COM812", # trailing comma missing
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.pylint]
+max-args = 6
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = [
+    "ANN",    # flake8-annotations
+    "ARG002", # flake8-unused-arguments
+    "A002",   # flake8-builtins
+    "D",      # pydocstyle
+    "S",      # flake8-bandit (security checks)
+]
 
 [tool.mypy]
 files = "zeroeventhub,tests"
@@ -50,13 +128,6 @@ module = "tests.*"
 # enabled Mypy complains about test functions without type annotations.
 disallow_untyped_defs = false
 check_untyped_defs = true
-
-[tool.pylint.parameter_documentation]
-accept-no-param-doc = true
-accept-no-raise-doc = false
-accept-no-return-doc = true
-accept-no-yields-doc = true
-default-docstring-type = "default"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
