@@ -153,15 +153,6 @@ reportUnnecessaryTypeIgnoreComment = "error"
 reportMatchNotExhaustive = "warning"
 reportShadowedImports = true
 
-[[tool.mypy.overrides]]
-module = "tests.*"
-# `disallow_untyped_defs` has to be explicitly disabled because it is enabled by
-# `strict`, and just setting `check_untyped_defs` does not disable it, even
-# though it is from the same option group as `check_untyped_defs`. With it
-# enabled Mypy complains about test functions without type annotations.
-disallow_untyped_defs = false
-check_untyped_defs = true
-
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 
