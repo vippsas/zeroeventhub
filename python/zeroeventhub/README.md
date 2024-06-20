@@ -114,7 +114,7 @@ This library makes it easy to setup a zeroeventhub feed endpoint with FastAPI.
 
 To run the test suite, assuming you already have Python 3.10 or later installed and on your `PATH`:
 ```sh
-pip install poetry==1.5.1
+pip install poetry==1.8.3
 poetry config virtualenvs.in-project true
 poetry install --sync
 poetry run coverage run --branch -m pytest
@@ -126,8 +126,7 @@ Then, you can open the `htmlcov/index.html` file in your browser to look at the 
 Also, to pass the CI checks, you may want to run the following before pushing your changes:
 
 ```sh
-poetry run black tests/ zeroeventhub/
-poetry run pylint ./zeroeventhub/
-poetry run flake8
-poetry run mypy
+poetry run ruff format
+poetry run ruff check
+poetry run pyright
 ```
