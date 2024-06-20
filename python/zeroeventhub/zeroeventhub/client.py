@@ -119,6 +119,8 @@ class Client:
         res.raise_for_status()
 
         async for line in aiter_lines(res, "\n"):
+            if not line:
+                continue
             yield self._parse_checkpoint_or_event(line)
 
     def _parse_checkpoint_or_event(self, raw_line: str) -> Union[Event, Cursor]:
