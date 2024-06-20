@@ -311,6 +311,31 @@ async def test_fetch_events_succeeds_when_response_is_empty(
     mock_event_receiver.checkpoint.assert_not_called()
 
 
+async def test_fetch_events_succeeds_when_response_is_empty_line(
+    client, mock_event_receiver, respx_mock
+):
+    """Test that fetch_events gracefully handles an empty line in the response."""
+    # arrange
+    cursors = [Cursor(1, "cursor1"), Cursor(2, "cursor2")]
+    page_size_hint = 10
+    headers = None
+
+    respx_mock.get(client.url).mock(
+        return_value=httpx.Response(
+            status_code=204,
+            headers={"content_type": "application/x-ndjson"},
+            content="\n",
+        )
+    )
+
+    # act
+    await receive_events(mock_event_receiver, client.fetch_events(cursors, page_size_hint, headers))
+
+    # assert that the event and checkpoint methods were not called
+    mock_event_receiver.event.assert_not_called()
+    mock_event_receiver.checkpoint.assert_not_called()
+
+
 async def test_raises_error_when_response_contains_invalid_json_line(
     client, mock_event_receiver, respx_mock
 ):
