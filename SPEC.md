@@ -221,7 +221,7 @@ pattern predictable in the case that producers can optimize for it.
 
 ### Response
 
-The response is served as new-line-delimited JSON (http://ndjson.org).
+The response is served as new-line-delimited JSON [NDJSON Wikipedia](https://en.wikipedia.org/wiki/JSON_streaming#Newline-Delimited_JSON).
 Each line contains *either* an event, *or* a checkpoint.
 
 The rationale for an NDJSON format is that the same specification will work
