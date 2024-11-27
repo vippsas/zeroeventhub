@@ -7,7 +7,7 @@ from zeroeventhub import (
 )
 
 
-@pytest.fixture()
+@pytest.fixture
 def page_event_receiver():
     return PageEventReceiver()
 

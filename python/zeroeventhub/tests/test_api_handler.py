@@ -24,10 +24,7 @@ class FakeAsyncDataReader(DataReader):
         headers: Sequence[str] | None,
         page_size: int | None,
     ) -> AsyncGenerator[dict[str, Any], None]:
-        header_dict = {}
-        if headers:
-            for header in headers:
-                header_dict[header] = header
+        header_dict = {header: header for header in headers} if headers else {}
         event_list_p1 = ["e1", "e2", "e3"]
         event_list_p2 = ["e4", "e5", "e6"]
 
@@ -60,10 +57,7 @@ class FakeDataReader(DataReader):
         headers: Sequence[str] | None,
         page_size: int | None,
     ) -> Generator[dict[str, Any], None, None]:
-        header_dict = {}
-        if headers:
-            for header in headers:
-                header_dict[header] = header
+        header_dict = {header: header for header in headers} if headers else {}
         event_list_p1 = ["e1", "e2", "e3"]
         event_list_p2 = ["e4", "e5", "e6"]
         for cursor in cursors:
@@ -101,7 +95,7 @@ async def validate_async_endpoint(request: Request) -> StreamingResponse:
     return api_handler.handle(request)
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio
 async def test_request_handler_single_cursor() -> None:
     async with AsyncClient(app=app, base_url="http://test") as client:
         response = await client.get("/feed/v1?n=2&cursor0=c1")
@@ -116,7 +110,7 @@ async def test_request_handler_single_cursor() -> None:
     ]
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio
 async def test_request_handler_double_cursors() -> None:
     async with AsyncClient(app=app, base_url="http://test") as client:
         response = await client.get("/feed/v1?n=2&cursor0=c0&cursor1=c1")
@@ -134,7 +128,7 @@ async def test_request_handler_double_cursors() -> None:
     ]
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio
 async def test_request_handler_full_parameter_set() -> None:
     async with AsyncClient(app=app, base_url="http://test") as client:
         response = await client.get(
@@ -154,7 +148,7 @@ async def test_request_handler_full_parameter_set() -> None:
     ]
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio
 async def test_request_handler_cursor0_skipping() -> None:
     async with AsyncClient(app=app, base_url="http://test") as client:
         response = await client.get("/feed/v1?n=2&cursor1=c1")
@@ -225,7 +219,7 @@ def test_invalid_cursor_param(url: str) -> None:
     assert response.json() == {"detail": "Cursor parameter is missing"}
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio
 async def test_work_with_async_endpoint() -> None:
     async with AsyncClient(app=app, base_url="http://test") as client:
         response = await client.get("/feed/v2?n=2&cursor0=c1")
