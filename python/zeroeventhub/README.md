@@ -114,7 +114,7 @@ This library makes it easy to setup a zeroeventhub feed endpoint with FastAPI.
 
 To run the test suite, assuming you already have Python 3.10 or later installed and on your `PATH`:
 ```sh
-pip install poetry==1.8.3
+pip install poetry==1.8.4
 poetry config virtualenvs.in-project true
 poetry install --sync
 poetry run coverage run --branch -m pytest
