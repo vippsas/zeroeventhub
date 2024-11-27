@@ -27,7 +27,7 @@ class IteratorStream(AsyncByteStream):
             yield chunk
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_event_receiver():
     receiver_mock = MagicMock(spec=EventReceiver)
     receiver_mock.event = AsyncMock()
