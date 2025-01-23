@@ -2,12 +2,13 @@ package zeroeventhub
 
 import (
 	"fmt"
-	"github.com/gorilla/mux"
-	"github.com/sirupsen/logrus"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+
+	"github.com/gorilla/mux"
+	"github.com/sirupsen/logrus"
 )
 
 // EventPublisher is a generic-based interface that has to be implemented on a server side.
@@ -64,7 +65,7 @@ func HandlerWithoutRoute(api EventPublisher, getLogger func(request *http.Reques
 			WithField("Cursors", cursors).
 			WithField("PageSizeHint", pageSizeHint).
 			WithField("Headers", headers)
-		fields.Info()
+		fields.Debug()
 		serializer := NewNDJSONEventSerializer(writer)
 		err = api.FetchEvents(request.Context(), cursors, pageSizeHint, serializer, headers...)
 		if err != nil {
