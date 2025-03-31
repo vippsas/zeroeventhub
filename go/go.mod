@@ -1,6 +1,6 @@
 module github.com/vippsas/zeroeventhub/go
 
-go 1.18
+go 1.23.7
 
 require (
 	github.com/gorilla/mux v1.8.0
