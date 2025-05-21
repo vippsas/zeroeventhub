@@ -5,8 +5,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"io"
 	"net/http"
@@ -115,9 +115,9 @@ func (c Client) FetchEvents(ctx context.Context, cursors []Cursor, pageSizeHint 
 			return err
 		} else {
 			if string(all) == "\n" || string(all) == "" {
-				err = errors.Errorf("empty response body")
+				err = fmt.Errorf("empty response body")
 			} else {
-				err = errors.Errorf("unexpected response body: %s", string(all))
+				err = fmt.Errorf("unexpected response body: %s", string(all))
 			}
 			log.WithField("event", "zeroeventhub.unexpected_response_body").WithError(err).Error()
 			return err
